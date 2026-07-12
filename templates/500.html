@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}500 - Server Error{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/error.css') }}">
+{% endblock %}
+
+{% block main_class %}error-page{% endblock %}
+{% block flash_messages %}{% endblock %}
+
+{% block content %}
+<div class="error-card">
+    <h1>500</h1>
+    <h2>Terjadi Kesalahan Server</h2>
+    <p>
+        Aplikasi mengalami masalah internal. Bukan salah Anda, untuk sekali ini
+        manusia pengguna bebas dari tuduhan.
+    </p>
+
+    <div class="actions">
+        <a href="/" class="btn">Kembali ke Katalog</a>
+
+        {% if session.get("admin_logged_in") %}
+        <a href="/admin" class="btn secondary">Dashboard Admin</a>
+        {% elif session.get("user_logged_in") %}
+        <a href="/user/dashboard" class="btn secondary">Dashboard User</a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

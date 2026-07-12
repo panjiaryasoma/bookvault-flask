@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}API Documentation - BookVault{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/api_docs.css') }}">
+{% endblock %}
+
+{% block header %}
+<header>
+    <div>
+        <h1>API Documentation</h1>
+        <p>Dokumentasi REST API lokal BookVault</p>
+    </div>
+    <div>
+        <a href="/">Katalog</a> |
+        <a href="/admin">Dashboard Admin</a>
+    </div>
+</header>
+{% endblock %}
+
+{% block content %}
+<div class="panel">
+    <h2>Informasi Umum</h2>
+    <p>
+        BookVault menyediakan REST API lokal untuk membaca, menambah, mengubah,
+        dan menghapus data buku dari database SQLite.
+    </p>
+    <p>
+        Endpoint <code>POST</code>, <code>PUT</code>, dan <code>DELETE</code>
+        wajib menggunakan API key pada header:
+    </p>
+
+    <pre>X-API-Key: bookvault-api-key-123</pre>
+</div>
+
+<div class="panel">
+    <h2>Daftar Endpoint</h2>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Method</th>
+                <th>Endpoint</th>
+                <th>Deskripsi</th>
+                <th>API Key</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in endpoints %}
+            <tr>
+                <td class="method">{{ item.method }}</td>
+                <td><code>{{ item.endpoint }}</code></td>
+                <td>{{ item.description }}</td>
+                <td>
+                    {% if item.api_key == "Wajib" %}
+                    <span class="required">{{ item.api_key }}</span>
+                    {% else %}
+                    <span class="optional">{{ item.api_key }}</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="panel">
+    <h2>Contoh Body POST /api/books</h2>
+
+    <pre>{
+  "title": "No Longer Human",
+  "author": "Osamu Dazai",
+  "genre": "Japanese Literature",
+  "year": 1948,
+  "rating": 4.4,
+  "description": "Novel tentang alienasi, identitas, dan kehancuran psikologis.",
+  "cover_image": ""
+}</pre>
+</div>
+
+<div class="panel">
+    <h2>Contoh Body PUT /api/books/&lt;id&gt;</h2>
+
+    <pre>{
+  "title": "No Longer Human Updated",
+  "author": "Osamu Dazai",
+  "genre": "Japanese Literature",
+  "year": 1948,
+  "rating": 4.6,
+  "description": "Data buku berhasil diperbarui melalui endpoint PUT."
+}</pre>
+</div>
+
+<div class="panel">
+    <h2>Contoh Response Error API Key</h2>
+
+    <pre>{
+  "error": "Unauthorized",
+  "message": "Valid API key is required"
+}</pre>
+</div>
+{% endblock %}

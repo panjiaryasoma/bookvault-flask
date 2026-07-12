@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}404 - Halaman Tidak Ditemukan{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/error.css') }}">
+{% endblock %}
+
+{% block main_class %}error-page{% endblock %}
+{% block flash_messages %}{% endblock %}
+
+{% block content %}
+<div class="error-card">
+    <h1>404</h1>
+    <h2>Halaman Tidak Ditemukan</h2>
+    <p>
+        Halaman yang Anda cari tidak tersedia atau mungkin sudah dipindahkan.
+        Singkatnya, alamat ini nyasar.
+    </p>
+
+    <div class="actions">
+        <a href="/" class="btn">Kembali ke Katalog</a>
+
+        {% if session.get("admin_logged_in") %}
+        <a href="/admin" class="btn secondary">Dashboard Admin</a>
+        {% elif session.get("user_logged_in") %}
+        <a href="/user/dashboard" class="btn secondary">Dashboard User</a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

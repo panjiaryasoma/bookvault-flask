@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}BookVault{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
+{% endblock %}
+
+{% block header %}
+<header>
+    <h1>BookVault</h1>
+    <p>Sistem Katalog Buku Digital Berbasis Flask dan REST API</p>
+    <p>
+        <a href="/public-books">Lihat Data Buku dari API Publik</a>
+
+        {% if session.get("user_logged_in") %}
+        | <span>Login sebagai: {{ session.get("user_username") }}</span>
+        | <a href="/user/dashboard">Dashboard User</a>
+        | <a href="/logout">Logout</a>
+
+        {% elif session.get("admin_logged_in") %}
+        | <span>Login sebagai: {{ session.get("admin_username") }}</span>
+        | <a href="/api/docs">API Docs</a>
+        | <a href="/admin">Dashboard Admin</a>
+        | <a href="/admin/logout">Logout Admin</a>
+
+        {% else %}
+        | <a href="/register">Register</a>
+        | <a href="/login">Login User</a>
+        | <a href="/admin/login">Login Admin</a>
+        {% endif %}
+    </p>
+
+    {% if session.get("user_logged_in") %}
+    <p>Selamat datang, {{ session.get("user_username") }}. Anda login sebagai user biasa.</p>
+    {% elif session.get("admin_logged_in") %}
+    <p>Selamat datang, {{ session.get("admin_username") }}. Anda login sebagai admin.</p>
+    {% endif %}
+</header>
+{% endblock %}
+
+{% block content %}
+<form method="GET" action="/" class="search-box">
+    <input type="text" name="q" placeholder="Cari judul atau penulis..." value="{{ q }}">
+    <select name="genre" class="genre-select">
+        <option value="">Semua Genre</option>
+        {% for g in genres %}
+        <option value="{{ g }}" {% if selected_genre == g %}selected{% endif %}>
+            {{ g }}
+        </option>
+        {% endfor %}
+    </select>
+    <button type="submit">Cari</button>
+</form>
+
+{% if pagination %}
+<p>Menampilkan {{ books|length }} dari {{ pagination.total }} buku.</p>
+{% else %}
+<p>Menampilkan {{ books|length }} buku.</p>
+{% endif %}
+
+<div class="grid">
+    {% for book in books %}
+    <div class="card">
+        {% if book.cover_image %}
+        <img src="{{ book.cover_image }}" alt="Cover {{ book.title }}" class="book-cover">
+        {% else %}
+        <div class="book-cover cover-placeholder">
+            <span>No Cover</span>
+        </div>
+        {% endif %}
+
+        <h2>{{ book.title }}</h2>
+
+        <div class="meta">
+            {{ book.author }} • {{ book.year }} • {{ book.genre }}
+        </div>
+
+        <p>{{ book.description }}</p>
+
+        {% if book.rating and book.rating > 0 %}
+        <p class="rating">Rating: {{ book.rating }}</p>
+        {% else %}
+        <p class="rating">Rating: Belum dinilai</p>
+        {% endif %}
+
+        <a href="/book/{{ book.id }}">Lihat Detail</a>
+
+        {% if session.get("user_logged_in") %}
+            {% if book.id in favorite_ids %}
+            <form method="POST" action="/favorite/remove/{{ book.id }}" class="favorite-form">
+                <button type="submit" class="btn-favorited">Sudah di Favorit - Hapus</button>
+            </form>
+            {% else %}
+            <form method="POST" action="/favorite/add/{{ book.id }}" class="favorite-form">
+                <button type="submit">Tambah ke Favorit</button>
+            </form>
+            {% endif %}
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+
+{% if pagination and pagination.pages > 1 %}
+<div class="pagination">
+    {% if pagination.has_prev %}
+    <a href="{{ url_for('index', page=pagination.prev_num, q=q, genre=selected_genre) }}">
+        ← Sebelumnya
+    </a>
+    {% else %}
+    <span class="disabled">← Sebelumnya</span>
+    {% endif %}
+
+    <span class="page-info">
+        Halaman {{ pagination.page }} dari {{ pagination.pages }}
+    </span>
+
+    {% if pagination.has_next %}
+    <a href="{{ url_for('index', page=pagination.next_num, q=q, genre=selected_genre) }}">
+        Berikutnya →
+    </a>
+    {% else %}
+    <span class="disabled">Berikutnya →</span>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/index.js') }}"></script>
+{% endblock %}

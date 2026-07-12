@@ -1,0 +1,173 @@
+body {
+    font-family: Georgia, serif;
+    background: #16130f;
+    color: #f3ead7;
+    margin: 0;
+    padding: 0;
+}
+
+header {
+    padding: 28px 60px;
+    background: #211b14;
+    border-bottom: 1px solid #6b4f2a;
+}
+
+header h1 {
+    margin: 0;
+    color: #d4af37;
+    letter-spacing: 1px;
+}
+
+header p {
+    color: #c8bfae;
+}
+
+a {
+    color: #d4af37;
+    text-decoration: none;
+}
+
+.container {
+    padding: 35px 60px;
+}
+
+.panel {
+    background: #211b14;
+    border: 1px solid #6b4f2a;
+    border-radius: 14px;
+    padding: 24px;
+    margin-bottom: 25px;
+}
+
+.panel h2 {
+    margin-top: 0;
+    color: #d4af37;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 18px;
+}
+
+.card {
+    background: #211b14;
+    border: 1px solid #6b4f2a;
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.card h3 {
+    margin: 0 0 8px;
+    color: #d4af37;
+    font-size: 20px;
+}
+
+.meta {
+    color: #c8bfae;
+    font-size: 14px;
+    margin-bottom: 12px;
+}
+
+.rating {
+    color: #f5c542;
+    font-weight: bold;
+}
+
+button {
+    padding: 10px 14px;
+    border-radius: 6px;
+    border: 1px solid #6b4f2a;
+    background: #d4af37;
+    color: #16130f;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.empty {
+    color: #c8bfae;
+    font-style: italic;
+}
+
+.flash-container {
+    margin-bottom: 20px;
+}
+
+.flash {
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    border: 1px solid #6b4f2a;
+    background: #211b14;
+    font-weight: bold;
+}
+
+.flash.success {
+    color: #9be28f;
+}
+
+.flash.error {
+    color: #ff8f8f;
+}
+
+.flash.warning {
+    color: #f5c542;
+}
+
+.flash.info {
+    color: #c8bfae;
+}
+
+.favorite-form {
+    margin-top: 12px;
+}
+
+.book-cover {
+    width: 100%;
+    height: 240px;
+    object-fit: cover;
+    border-radius: 10px;
+    margin-bottom: 14px;
+    border: 1px solid #6b4f2a;
+    background: #100d0a;
+}
+
+.cover-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #7d7163;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+.user-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-top: 18px;
+}
+
+.user-stat-card {
+    background: #16130f;
+    border: 1px solid #6b4f2a;
+    border-radius: 12px;
+    padding: 18px;
+}
+
+.user-stat-card .label {
+    display: block;
+    color: #c8bfae;
+    font-size: 14px;
+    margin-bottom: 8px;
+}
+
+.user-stat-card strong {
+    color: #d4af37;
+    font-size: 24px;
+}
+
+.dashboard-note {
+    margin-top: 22px;
+    color: #c8bfae;
+}

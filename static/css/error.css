@@ -1,0 +1,71 @@
+body {
+    font-family: Georgia, serif;
+    background: #16130f;
+    color: #f3ead7;
+    margin: 0;
+    padding: 0;
+}
+
+.error-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    box-sizing: border-box;
+}
+
+.error-card {
+    max-width: 620px;
+    background: #211b14;
+    border: 1px solid #6b4f2a;
+    border-radius: 18px;
+    padding: 42px;
+    text-align: center;
+}
+
+.error-card h1 {
+    color: #d4af37;
+    font-size: 90px;
+    margin: 0;
+    letter-spacing: 4px;
+}
+
+.error-card h2 {
+    color: #f3ead7;
+    margin: 12px 0;
+    font-size: 28px;
+}
+
+.error-card p {
+    color: #c8bfae;
+    line-height: 1.7;
+    margin-bottom: 28px;
+}
+
+.actions {
+    display: flex;
+    gap: 14px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.btn {
+    display: inline-block;
+    padding: 12px 16px;
+    border-radius: 8px;
+    background: #d4af37;
+    color: #16130f;
+    font-weight: bold;
+    text-decoration: none;
+}
+
+.btn.secondary {
+    background: #3a3025;
+    color: #d4af37;
+    border: 1px solid #d4af37;
+}
+
+.btn:hover {
+    opacity: 0.9;
+}

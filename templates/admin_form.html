@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} - BookVault{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin_form.css') }}">
+{% endblock %}
+
+{% block header %}
+<header>
+    <h1>{{ title }}</h1>
+</header>
+{% endblock %}
+
+{% block content %}
+{% if error %}
+<p class="error">{{ error }}</p>
+{% endif %}
+
+<form method="POST">
+    <label>Judul Buku</label>
+    <input type="text" name="title" value="{{ book.title if book else '' }}" required>
+
+    <label>Penulis</label>
+    <input type="text" name="author" value="{{ book.author if book else '' }}" required>
+
+    <label>Genre</label>
+    <input type="text" name="genre" value="{{ book.genre if book else '' }}" required>
+
+    <label>Tahun Terbit</label>
+    <input type="number" name="year" value="{{ book.year if book else '' }}" required>
+
+    <label>Rating</label>
+    <input type="number" step="0.1" name="rating" value="{{ book.rating if book else '' }}">
+
+    <label>Deskripsi</label>
+    <textarea name="description">{{ book.description if book else '' }}</textarea>
+
+    <button type="submit">Simpan</button>
+    <a href="/admin">Batal</a>
+</form>
+{% endblock %}

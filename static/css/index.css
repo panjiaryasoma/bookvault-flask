@@ -1,0 +1,147 @@
+body {
+    font-family: Georgia, serif;
+    background: #16130f;
+    color: #f3ead7;
+    margin: 0;
+    padding: 0;
+}
+
+header {
+    padding: 28px 60px;
+    background: #211b14;
+    border-bottom: 1px solid #6b4f2a;
+}
+
+header h1 {
+    margin: 0;
+    color: #d4af37;
+    letter-spacing: 1px;
+}
+
+header p {
+    margin: 8px 0 0;
+    color: #c8bfae;
+}
+
+.container {
+    padding: 35px 60px;
+}
+
+.search-box {
+    margin-bottom: 25px;
+}
+
+input,
+select,
+button {
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid #6b4f2a;
+    background: #241e17;
+    color: #f3ead7;
+}
+
+button {
+    background: #d4af37;
+    color: #16130f;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 18px;
+}
+
+.card {
+    background: #211b14;
+    border: 1px solid #6b4f2a;
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.card h2 {
+    margin: 0 0 8px;
+    color: #d4af37;
+    font-size: 20px;
+}
+
+.meta {
+    color: #c8bfae;
+    font-size: 14px;
+    margin-bottom: 12px;
+}
+
+.rating {
+    color: #f5c542;
+    font-weight: bold;
+}
+
+a {
+    color: #d4af37;
+    text-decoration: none;
+}
+
+.btn-favorited {
+    background: #3a3025;
+    color: #d4af37;
+    border: 1px solid #d4af37;
+}
+
+.btn-favorited:hover {
+    background: #4a3b2b;
+}
+
+.favorite-form {
+    margin-top: 12px;
+}
+
+.pagination {
+    margin-top: 32px;
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.pagination a,
+.pagination span {
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid #6b4f2a;
+    background: #211b14;
+}
+
+.pagination a {
+    color: #d4af37;
+    font-weight: bold;
+}
+
+.pagination .page-info {
+    color: #c8bfae;
+}
+
+.pagination .disabled {
+    color: #7d7163;
+}
+
+.book-cover {
+    width: 100%;
+    height: 260px;
+    object-fit: cover;
+    border-radius: 10px;
+    margin-bottom: 14px;
+    border: 1px solid #6b4f2a;
+    background: #100d0a;
+}
+
+.cover-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #7d7163;
+    font-weight: bold;
+    letter-spacing: 1px;
+}

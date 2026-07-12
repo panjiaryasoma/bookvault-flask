@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}BookVault{% endblock %}</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+    {% block styles %}{% endblock %}
+</head>
+
+<body>
+    {% block header %}{% endblock %}
+
+    <main class="{% block main_class %}container{% endblock %}">
+        {% block flash_messages %}
+        {% include "flash_messages.html" %}
+        {% endblock %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    {% block scripts %}{% endblock %}
+</body>
+
+</html>

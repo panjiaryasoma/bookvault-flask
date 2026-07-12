@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}{{ book.title }} - BookVault{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/detail.css') }}">
+{% endblock %}
+
+{% block header %}
+<header>
+    <h1>BookVault</h1>
+</header>
+{% endblock %}
+
+{% block content %}
+<div class="detail-card">
+    {% if book.cover_image %}
+    <img src="{{ book.cover_image }}" alt="Cover {{ book.title }}" class="detail-cover">
+    {% else %}
+    <div class="detail-cover cover-placeholder">
+        <span>No Cover</span>
+    </div>
+    {% endif %}
+
+    <div class="detail-info">
+        <h2>{{ book.title }}</h2>
+        <p class="meta">{{ book.author }} • {{ book.year }} • {{ book.genre }}</p>
+        <p>{{ book.description }}</p>
+
+        {% if book.rating and book.rating > 0 %}
+        <p class="rating">Rating: {{ book.rating }}</p>
+        {% else %}
+        <p class="rating">Rating: Belum dinilai</p>
+        {% endif %}
+
+        <a href="/">Kembali ke Katalog</a>
+    </div>
+</div>
+{% endblock %}
