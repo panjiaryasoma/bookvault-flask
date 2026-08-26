@@ -1,22 +1,86 @@
+:root {
+    --bg: #15110d;
+    --bg-deep: #0f0c09;
+    --surface: #211a13;
+    --surface-soft: #2a2118;
+    --paper: #f0e6d2;
+    --muted: #b9aa93;
+    --faint: #817360;
+    --line: #5d4a32;
+    --line-soft: rgba(168, 134, 82, 0.24);
+    --brass: #c6a15b;
+    --brass-soft: #8d6f3d;
+    --green: #93aa7b;
+    --red: #b8756d;
+    --radius: 10px;
+    --radius-sm: 6px;
+    --shell: 1160px;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    min-height: 100%;
+}
+
 body {
-    font-family: Georgia, serif;
-    background: #16130f;
-    color: #f3ead7;
+    min-height: 100%;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background:
+        linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.014) 1px, transparent 1px),
+        radial-gradient(circle at 20% -10%, rgba(198, 161, 91, 0.12), transparent 28%),
+        linear-gradient(180deg, var(--bg), var(--bg-deep));
+    background-size: 38px 38px, 38px 38px, auto, auto;
+    color: var(--paper);
     margin: 0;
     padding: 0;
+    line-height: 1.6;
 }
 
 a {
-    color: #d4af37;
+    color: var(--brass);
     text-decoration: none;
 }
 
 a:hover {
-    opacity: 0.85;
+    color: var(--paper);
+}
+
+button,
+input,
+select,
+textarea {
+    font: inherit;
+}
+
+button {
+    cursor: pointer;
 }
 
 .container {
-    padding: 35px 60px;
+    width: min(var(--shell), calc(100% - 40px));
+    margin: 0 auto;
+    padding: 34px 0 56px;
+}
+
+.skip-link {
+    position: absolute;
+    top: 12px;
+    left: 14px;
+    z-index: 1000;
+    padding: 9px 12px;
+    border-radius: var(--radius-sm);
+    background: var(--brass);
+    color: var(--bg-deep);
+    font-weight: 700;
+    transform: translateY(-160%);
+}
+
+.skip-link:focus {
+    transform: translateY(0);
 }
 
 .flash-container {
@@ -25,43 +89,38 @@ a:hover {
 
 .flash {
     padding: 12px 16px;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     margin-bottom: 12px;
-    border: 1px solid #6b4f2a;
-    background: #211b14;
-    font-weight: bold;
+    border: 1px solid var(--line-soft);
+    background: var(--surface);
+    font-weight: 700;
 }
 
 .flash.success {
-    color: #9be28f;
+    color: var(--green);
 }
 
 .flash.error {
-    color: #ff8f8f;
+    color: var(--red);
 }
 
 .flash.warning {
-    color: #f5c542;
+    color: var(--brass);
 }
 
 .flash.info {
-    color: #c8bfae;
+    color: var(--muted);
 }
 
-button {
-    cursor: pointer;
-}
-
-@media (max-width: 768px) {
-    .container {
-        padding: 24px;
-    }
-}
-
-/* Base refactor helper */
 .auth-page {
     min-height: 100vh;
     display: block;
     padding: 1px 0;
-    box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+    .container {
+        width: min(100% - 28px, var(--shell));
+        padding: 24px 0 42px;
+    }
 }
