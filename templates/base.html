@@ -3,7 +3,6 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}BookVault{% endblock %}</title>
 
     <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
@@ -11,11 +10,9 @@
 </head>
 
 <body>
-    <a class="skip-link" href="#main-content">Lewati ke konten utama</a>
-
     {% block header %}{% endblock %}
 
-    <main id="main-content" class="{% block main_class %}container{% endblock %}">
+    <main class="{% block main_class %}container{% endblock %}">
         {% block flash_messages %}
         {% include "flash_messages.html" %}
         {% endblock %}
