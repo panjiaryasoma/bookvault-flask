@@ -1,181 +1,389 @@
 # BookVault Design Direction
 
-This document records the visual and product-design direction for BookVault. It uses the supplied references as inspiration only. Do not copy layouts, code, brand assets, or proprietary material from any source.
+This document records the visual direction for BookVault after reviewing the supplied references and the Afterlife AI interface.
 
-## Goal
+The goal is not to copy any reference. The goal is to translate useful design principles into a BookVault-specific Flask catalog UI.
 
-BookVault should feel like a clean, serious digital book catalog, not a generic AI dashboard or overdecorated dark theme.
+BookVault should feel like a restrained digital book archive: readable, warm, practical, and deliberate. It should not become an AI agency landing page, a neon dashboard, or a fake enterprise console.
 
-The UI should stay simple enough for a Flask course project, but look more deliberate than a default CRUD screen.
+---
 
-## Reference Roles
+## 1. Product truth
 
-### Engineering and product discipline
+BookVault is a small back-end coursework project with:
 
-Use these references for engineering taste, structure, and product credibility, not direct UI copying:
+- local book catalog;
+- user registration and login;
+- user favorites;
+- admin CRUD;
+- Open Library import;
+- REST API documentation;
+- Postman-tested API endpoints.
+
+The design must serve those features. It must not visually pretend that BookVault is an autonomous AI product, a complex analytics platform, or a production SaaS suite.
+
+The interface should communicate:
+
+- catalog clarity;
+- admin control;
+- readable forms;
+- reliable API documentation;
+- simple book discovery;
+- dark academic tone.
+
+---
+
+## 2. Reference interpretation
+
+### 2.1 References to use for engineering taste
+
+Use these as discipline references, not visual templates:
 
 - ECC: planning, verification, and process discipline.
 - FreeLLMAPI: API-oriented clarity and endpoint documentation mindset.
-- Appwrite, Supabase, PocketBase: backend-product clarity, simple setup language, and developer-facing documentation tone.
-- Coolify: self-hosted product clarity and pragmatic dashboard organization.
-- n8n: workflow/product clarity and readable navigation patterns.
+- Appwrite / Supabase / PocketBase: setup clarity, simple backend-product language, and developer-facing documentation.
+- Coolify / n8n: practical dashboard organization and workflow clarity.
 
-### UI and interaction direction
+### 2.2 References to use for interface taste
 
-Use these references for visual and interface cues:
+Use these as loose UI taste references, not direct layouts:
 
-- ui-ux-pro-max-skill: UI critique checklist and design-quality guardrail.
-- Nelson Lee brand-guidelines post: convert brand rules into reusable interface rules.
-- 21st.dev Dali template: confident software-studio presentation, but avoid copying the AI-agency aesthetic.
-- Watermelon UI: component consistency and dashboard block discipline.
-- Motion Primitives: subtle interaction only. No decorative animation for a simple Flask app.
-- Bklit: data/card readability and restraint.
+- ui-ux-pro-max-skill: design-review discipline and avoiding generic AI slop.
+- Nelson Lee brand-guideline article: turning brand rules into reusable UI constraints.
+- 21st.dev Dali template: strong hierarchy and polished composition, but do not copy the AI agency look.
+- Watermelon UI: restrained components and spacing.
+- Motion Primitives: purposeful microinteraction only.
+- Bklit: editorial dark interface mood.
+- Afterlife AI: operational-editorial restraint, warm charcoal palette, large serif moments, ruled sections, and evidence-like information grouping.
 
-## BookVault Visual Positioning
+### 2.3 What not to copy from Afterlife AI
 
-BookVault should be:
+Do not copy:
 
-- editorial
-- academic
-- calm
-- readable
-- slightly premium
-- restrained
-- clear for evaluators
+- the exact hero layout;
+- the huge `Give surplus inventory...` statement style;
+- the `SYSTEM READY` operator-console language;
+- the single linear decision-workspace structure;
+- the XLSX dropzone pattern;
+- the rescue workflow numbering;
+- report-ledger sections;
+- claim-boundary language specific to inventory rescue planning.
 
-BookVault should not be:
+Afterlife AI is a decision-support workspace. BookVault is a book catalog and CRUD/API project. Borrow the restraint, not the product identity.
 
-- neon
-- glossy
-- animated for no reason
-- startup-template heavy
-- glassmorphism
-- full of gradients
-- icon soup
-- fake AI product UI
+---
 
-## Palette
+## 3. BookVault visual thesis
 
-Keep the current warm dark-academia palette, but use it with restraint.
+BookVault uses an **Academic Archive** visual language.
+
+The interface should feel like:
+
+- a curated digital shelf;
+- an old reading room translated into a web app;
+- a practical admin catalog;
+- a small but polished Flask project.
+
+It should not feel like:
+
+- a chatbot;
+- an AI dashboard;
+- a crypto interface;
+- a landing page template;
+- a noisy SaaS admin panel;
+- a plain default CRUD app.
+
+Visual identity comes from:
+
+1. warm dark background;
+2. serif headings used selectively;
+3. sans-serif or system UI for controls if added later;
+4. strong spacing;
+5. low-radius borders;
+6. quiet brass accents;
+7. book-cover-led visual rhythm;
+8. forms and tables that feel deliberate.
+
+---
+
+## 4. Color direction
+
+Keep the current warm dark theme, but reduce gold overload.
+
+Recommended tokens:
 
 ```css
---bg: #16130f;
---surface: #211b14;
---surface-soft: #241e17;
---border: #6b4f2a;
---text: #f3ead7;
---muted: #c8bfae;
---accent: #d4af37;
---accent-soft: #b8942e;
---danger: #8b2f2f;
---success: #9be28f;
---warning: #f5c542;
---error: #ff8f8f;
+:root {
+    --canvas: #10110E;
+    --surface: #171813;
+    --surface-raised: #1E2019;
+    --border: #35372D;
+    --border-strong: #4A4B3D;
+    --text-primary: #EEECE4;
+    --text-secondary: #B1AEA4;
+    --text-tertiary: #7F7D74;
+    --accent: #B8A767;
+    --accent-hover: #D0BC78;
+    --danger: #B8756D;
+    --success: #819A79;
+    --warning: #C29A62;
+}
 ```
 
-Rules:
+Usage rules:
 
-- Gold is for headings, primary actions, ratings, and selected states.
-- Do not make every border, link, and label compete for attention.
-- Red is only for destructive actions.
-- Keep backgrounds warm and dark.
+- Background should be charcoal, not pure black.
+- Main text should be ivory, not pure white.
+- Brass is for active controls, section labels, ratings, and important links.
+- Do not make every title, border, button, and label bright gold.
+- Danger actions stay muted red, not neon red.
+- Success states use olive, not bright green.
 
-## Typography
+---
 
-Use Georgia as the main visual identity.
+## 5. Typography direction
 
-Rules:
+BookVault can keep Georgia because it fits the book theme.
 
-- Page titles should feel like book-section headings.
-- Metadata should be smaller and muted.
-- API Docs can use code blocks, but the rest of the app should feel literary rather than terminal-like.
+Use serif for:
 
-## Layout Rules
+- main page headings;
+- book titles;
+- empty/error page title moments.
 
-- Keep generous spacing.
-- Keep cards readable.
-- Avoid dense, tiny CRUD tables unless the page is explicitly admin-focused.
-- Forms should feel like editorial panels, not browser defaults.
-- Dashboard admin can be data-heavy, but it must stay quiet and structured.
+Use simpler interface styling for:
 
-## Component Rules
+- forms;
+- buttons;
+- tables;
+- metadata;
+- API docs.
 
-### Cards
+Avoid making every UI element look like a poster. A catalog still needs interface clarity, because apparently users enjoy being able to read things.
 
-Cards should have:
+Recommended hierarchy:
 
-- dark panel background
-- brass border
-- low-radius corners
-- clear title hierarchy
-- enough spacing between metadata, description, and action
+```css
+h1: clamp(34px, 5vw, 64px);
+h2: 24px - 34px;
+h3: 18px - 22px;
+body: 16px;
+metadata: 13px - 15px;
+```
 
-### Buttons
+---
 
-Primary button:
+## 6. Layout direction
 
-- gold background
-- dark text
-- bold
+Do not turn BookVault into a giant single-page marketing composition.
 
-Secondary button:
+BookVault should stay page-based:
 
-- dark background
-- brass border
-- gold text
+- `/` catalog;
+- `/book/<id>` detail;
+- `/login` user login;
+- `/register` user register;
+- `/user/dashboard` favorite dashboard;
+- `/admin/login` admin login;
+- `/admin` admin dashboard;
+- `/admin/book/add` and edit form;
+- `/public-books` Open Library import;
+- `/api/docs` technical documentation;
+- error pages.
 
-Danger button:
+Use the Afterlife-style editorial restraint only as texture:
 
-- dark red background
-- white text
+- cleaner header rhythm;
+- stronger section spacing;
+- fewer nested cards;
+- calmer borders;
+- less decorative gold.
 
-### Forms
+---
 
-Inputs should be consistent across login, register, admin form, filters, and import genre.
+## 7. Component direction
 
-Focus state must be visible but not neon.
+### 7.1 Header
 
-### Tables
+Keep headers simple.
 
-Admin tables should look like a ledger:
+Allowed:
 
-- readable rows
-- quiet borders
-- muted metadata
-- destructive actions visually separated
+- compact title;
+- short supporting subtitle;
+- small navigation links.
 
-### Animation
+Avoid:
 
-Use motion only if it improves comprehension.
+- giant hero on every page;
+- fake system status;
+- product claims that do not fit BookVault.
 
-For this project, CSS hover/focus states are enough. Do not add animation libraries.
+### 7.2 Catalog cards
 
-## Implementation Plan
+Catalog cards should behave like book entries, not KPI cards.
 
-Do not rewrite the entire visual system at once.
+Prioritize:
 
-Safe order:
+1. cover / placeholder;
+2. title;
+3. author;
+4. genre/year;
+5. rating;
+6. action link/favorite.
 
-1. Keep the existing layout.
-2. Normalize CSS variables in `base.css`.
-3. Reduce duplicated global CSS from page files.
-4. Improve spacing and hierarchy page by page.
-5. Test each page manually.
-6. Merge only after visual review.
+Card style should be quiet:
 
-## Visual Review Checklist
+- low-radius border;
+- warm surface;
+- no heavy shadow;
+- no hover glow;
+- cover remains the visual anchor.
+
+### 7.3 Forms
+
+Forms should be calm and readable.
+
+Use:
+
+- clear labels;
+- full-width inputs where useful;
+- visible focus;
+- consistent button placement.
+
+Do not use Afterlife's underline worksheet controls everywhere. BookVault forms are ordinary app forms, not an operator worksheet.
+
+### 7.4 Admin table
+
+Admin dashboard should feel like a ledger/catalog index.
+
+Use:
+
+- readable row spacing;
+- muted borders;
+- clear action links;
+- restrained delete button;
+- no decorative chart overload.
+
+The existing genre chart is acceptable if it stays quiet.
+
+### 7.5 API Docs
+
+API docs should lean more developer-documentation than visual showcase.
+
+Use:
+
+- endpoint tables;
+- method labels;
+- code blocks;
+- API key notes;
+- error response examples.
+
+Do not over-style API docs until they become harder to scan. That would be very on-brand for humanity, but still bad.
+
+---
+
+## 8. Motion direction
+
+Motion is optional and should remain minimal.
+
+Allowed:
+
+- button hover transition;
+- link hover transition;
+- subtle card border change;
+- focus states.
+
+Avoid:
+
+- animated hero text;
+- glowing cards;
+- parallax;
+- magnetic cursor;
+- text scramble;
+- infinite ambient animation;
+- motion that makes screenshots look worse.
+
+Respect reduced-motion if motion is ever added.
+
+---
+
+## 9. Anti-slop rules
+
+Do not add:
+
+- generic AI wording;
+- fake insights;
+- floating chatbot bubble;
+- neon or purple gradients;
+- glassmorphism;
+- giant rounded bento cards;
+- random icons;
+- emoji inside UI;
+- decorative charts;
+- excessive shadows;
+- every element in gold;
+- untested CSS rewrites across all pages.
+
+Use:
+
+- spacing;
+- hierarchy;
+- readable forms;
+- quiet borders;
+- restrained palette;
+- page-by-page visual checks.
+
+---
+
+## 10. Safe implementation plan
+
+Do not change every CSS file at once again.
+
+Use this order:
+
+1. Create a preview branch.
+2. Change only the catalog page first: `base.css` + `index.css`.
+3. Review screenshots before touching other pages.
+4. Then adjust login/register together.
+5. Then admin dashboard.
+6. Then public books.
+7. Then API docs and error pages.
+8. Merge only after screenshots look better than the current app.
+
+Visual work must improve screenshots, not just sound correct in Markdown. A brutal standard, apparently.
+
+---
+
+## 11. Acceptance checklist
 
 Before merging any visual pass:
 
-- Katalog still readable.
-- Login/register still centered and clean.
-- Admin dashboard still shows stats clearly.
-- Table actions still usable.
-- Public Books import flow still obvious.
-- API Docs still readable.
-- 404/500 pages still match the theme.
-- No page looks more "AI agency template" than book catalog.
+- [ ] Main branch remains stable.
+- [ ] Only one page group is changed per commit.
+- [ ] Catalog still feels like BookVault, not Afterlife AI.
+- [ ] Typography is readable.
+- [ ] Brass accent is restrained.
+- [ ] Forms remain easy to use.
+- [ ] Admin table remains practical.
+- [ ] API docs remain scannable.
+- [ ] 404 page still matches the app.
+- [ ] No unsupported product claims are introduced.
+- [ ] No new frontend dependency is added only for aesthetics.
+- [ ] Screenshots are compared before and after.
 
-## Important Constraint
+---
 
-BookVault is a Flask UAS project. Do not overbuild it into a React-style product site. The design should improve credibility without distracting from the backend features.
+## 12. Source hierarchy
+
+When references conflict, use this priority:
+
+1. BookVault assignment requirements.
+2. Current working Flask app behavior.
+3. BookVault user/admin/API feature truth.
+4. Existing BookVault visual identity.
+5. This design direction.
+6. External references.
+7. Afterlife AI visual system.
+
+External inspiration must never override what BookVault actually is.
