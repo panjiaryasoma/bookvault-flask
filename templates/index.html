@@ -7,177 +7,123 @@
 {% endblock %}
 
 {% block header %}
-<header class="site-header catalog-hero">
-    <div class="site-header__top">
-        <a href="/" class="brand">BookVault</a>
+<header>
+    <h1>BookVault</h1>
+    <p>Sistem Katalog Buku Digital Berbasis Flask dan REST API</p>
+    <p>
+        <a href="/public-books">Lihat Data Buku dari API Publik</a>
 
-        <nav class="nav-links" aria-label="Navigasi utama">
-            <a href="/public-books">Open Library</a>
+        {% if session.get("user_logged_in") %}
+        | <span>Login sebagai: {{ session.get("user_username") }}</span>
+        | <a href="/user/dashboard">Dashboard User</a>
+        | <a href="/logout">Logout</a>
 
-            {% if session.get("user_logged_in") %}
-            <a href="/user/dashboard">Dashboard User</a>
-            <a href="/logout">Logout</a>
+        {% elif session.get("admin_logged_in") %}
+        | <span>Login sebagai: {{ session.get("admin_username") }}</span>
+        | <a href="/api/docs">API Docs</a>
+        | <a href="/admin">Dashboard Admin</a>
+        | <a href="/admin/logout">Logout Admin</a>
 
-            {% elif session.get("admin_logged_in") %}
-            <a href="/api/docs">API Docs</a>
-            <a href="/admin">Dashboard Admin</a>
-            <a href="/admin/logout">Logout Admin</a>
-
-            {% else %}
-            <a href="/register">Register</a>
-            <a href="/login">Login User</a>
-            <a href="/admin/login">Login Admin</a>
-            {% endif %}
-        </nav>
-    </div>
-
-    <div class="hero-grid">
-        <div class="hero-copy-block">
-            <p class="eyebrow">Katalog Buku Digital</p>
-            <h1>Kelola arsip buku lokal dengan rapi.</h1>
-            <p class="hero-copy">
-                BookVault menggabungkan katalog lokal, autentikasi sederhana, fitur favorit,
-                import dari Open Library, dan REST API dalam satu aplikasi Flask.
-            </p>
-        </div>
-
-        <aside class="hero-ledger" aria-label="Ringkasan fitur BookVault">
-            <div>
-                <span>Koleksi</span>
-                <strong>Local catalog</strong>
-            </div>
-            <div>
-                <span>Integrasi</span>
-                <strong>Open Library API</strong>
-            </div>
-            <div>
-                <span>Endpoint</span>
-                <strong>REST API</strong>
-            </div>
-        </aside>
-    </div>
+        {% else %}
+        | <a href="/register">Register</a>
+        | <a href="/login">Login User</a>
+        | <a href="/admin/login">Login Admin</a>
+        {% endif %}
+    </p>
 
     {% if session.get("user_logged_in") %}
-    <div class="session-strip">
-        Login sebagai user: <strong>{{ session.get("user_username") }}</strong>
-    </div>
+    <p>Selamat datang, {{ session.get("user_username") }}. Anda login sebagai user biasa.</p>
     {% elif session.get("admin_logged_in") %}
-    <div class="session-strip">
-        Login sebagai admin: <strong>{{ session.get("admin_username") }}</strong>
-    </div>
+    <p>Selamat datang, {{ session.get("admin_username") }}. Anda login sebagai admin.</p>
     {% endif %}
 </header>
 {% endblock %}
 
 {% block content %}
-<section class="catalog-section" aria-labelledby="catalog-title">
-    <div class="section-heading">
-        <div>
-            <p class="section-label">Library Index</p>
-            <h2 id="catalog-title">Katalog lokal</h2>
+<form method="GET" action="/" class="search-box">
+    <input type="text" name="q" placeholder="Cari judul atau penulis..." value="{{ q }}">
+    <select name="genre" class="genre-select">
+        <option value="">Semua Genre</option>
+        {% for g in genres %}
+        <option value="{{ g }}" {% if selected_genre == g %}selected{% endif %}>
+            {{ g }}
+        </option>
+        {% endfor %}
+    </select>
+    <button type="submit">Cari</button>
+</form>
+
+{% if pagination %}
+<p>Menampilkan {{ books|length }} dari {{ pagination.total }} buku.</p>
+{% else %}
+<p>Menampilkan {{ books|length }} buku.</p>
+{% endif %}
+
+<div class="grid">
+    {% for book in books %}
+    <div class="card">
+        {% if book.cover_image %}
+        <img src="{{ book.cover_image }}" alt="Cover {{ book.title }}" class="book-cover">
+        {% else %}
+        <div class="book-cover cover-placeholder">
+            <span>No Cover</span>
+        </div>
+        {% endif %}
+
+        <h2>{{ book.title }}</h2>
+
+        <div class="meta">
+            {{ book.author }} • {{ book.year }} • {{ book.genre }}
         </div>
 
-        {% if pagination %}
-        <p class="result-count">Menampilkan {{ books|length }} dari {{ pagination.total }} buku.</p>
+        <p>{{ book.description }}</p>
+
+        {% if book.rating and book.rating > 0 %}
+        <p class="rating">Rating: {{ book.rating }}</p>
         {% else %}
-        <p class="result-count">Menampilkan {{ books|length }} buku.</p>
+        <p class="rating">Rating: Belum dinilai</p>
+        {% endif %}
+
+        <a href="/book/{{ book.id }}">Lihat Detail</a>
+
+        {% if session.get("user_logged_in") %}
+            {% if book.id in favorite_ids %}
+            <form method="POST" action="/favorite/remove/{{ book.id }}" class="favorite-form">
+                <button type="submit" class="btn-favorited">Sudah di Favorit - Hapus</button>
+            </form>
+            {% else %}
+            <form method="POST" action="/favorite/add/{{ book.id }}" class="favorite-form">
+                <button type="submit">Tambah ke Favorit</button>
+            </form>
+            {% endif %}
         {% endif %}
     </div>
+    {% endfor %}
+</div>
 
-    <form method="GET" action="/" class="search-box" aria-label="Cari dan filter katalog buku">
-        <label>
-            <span>Cari buku</span>
-            <input type="text" name="q" placeholder="Judul atau penulis" value="{{ q }}">
-        </label>
-
-        <label>
-            <span>Genre</span>
-            <select name="genre" class="genre-select">
-                <option value="">Semua Genre</option>
-                {% for g in genres %}
-                <option value="{{ g }}" {% if selected_genre == g %}selected{% endif %}>
-                    {{ g }}
-                </option>
-                {% endfor %}
-            </select>
-        </label>
-
-        <button type="submit">Cari katalog</button>
-    </form>
-
-    <div class="grid">
-        {% for book in books %}
-        <article class="card book-card">
-            <a href="/book/{{ book.id }}" class="cover-link" aria-label="Lihat detail {{ book.title }}">
-                {% if book.cover_image %}
-                <img src="{{ book.cover_image }}" alt="Cover {{ book.title }}" class="book-cover">
-                {% else %}
-                <div class="book-cover cover-placeholder">
-                    <span>No Cover</span>
-                </div>
-                {% endif %}
-            </a>
-
-            <div class="book-content">
-                <p class="book-genre">{{ book.genre }}</p>
-                <h3>{{ book.title }}</h3>
-
-                <div class="meta">
-                    {{ book.author }} · {{ book.year }}
-                </div>
-
-                <p class="description">{{ book.description }}</p>
-
-                {% if book.rating and book.rating > 0 %}
-                <p class="rating">Rating {{ book.rating }}</p>
-                {% else %}
-                <p class="rating muted">Belum dinilai</p>
-                {% endif %}
-            </div>
-
-            <div class="card-actions">
-                <a href="/book/{{ book.id }}" class="detail-link">Lihat Detail</a>
-
-                {% if session.get("user_logged_in") %}
-                    {% if book.id in favorite_ids %}
-                    <form method="POST" action="/favorite/remove/{{ book.id }}" class="favorite-form">
-                        <button type="submit" class="btn-favorited">Hapus Favorit</button>
-                    </form>
-                    {% else %}
-                    <form method="POST" action="/favorite/add/{{ book.id }}" class="favorite-form">
-                        <button type="submit">Tambah Favorit</button>
-                    </form>
-                    {% endif %}
-                {% endif %}
-            </div>
-        </article>
-        {% endfor %}
-    </div>
-
-    {% if pagination and pagination.pages > 1 %}
-    <nav class="pagination" aria-label="Navigasi halaman katalog">
-        {% if pagination.has_prev %}
-        <a href="{{ url_for('index', page=pagination.prev_num, q=q, genre=selected_genre) }}">
-            ← Sebelumnya
-        </a>
-        {% else %}
-        <span class="disabled">← Sebelumnya</span>
-        {% endif %}
-
-        <span class="page-info">
-            Halaman {{ pagination.page }} dari {{ pagination.pages }}
-        </span>
-
-        {% if pagination.has_next %}
-        <a href="{{ url_for('index', page=pagination.next_num, q=q, genre=selected_genre) }}">
-            Berikutnya →
-        </a>
-        {% else %}
-        <span class="disabled">Berikutnya →</span>
-        {% endif %}
-    </nav>
+{% if pagination and pagination.pages > 1 %}
+<div class="pagination">
+    {% if pagination.has_prev %}
+    <a href="{{ url_for('index', page=pagination.prev_num, q=q, genre=selected_genre) }}">
+        ← Sebelumnya
+    </a>
+    {% else %}
+    <span class="disabled">← Sebelumnya</span>
     {% endif %}
-</section>
+
+    <span class="page-info">
+        Halaman {{ pagination.page }} dari {{ pagination.pages }}
+    </span>
+
+    {% if pagination.has_next %}
+    <a href="{{ url_for('index', page=pagination.next_num, q=q, genre=selected_genre) }}">
+        Berikutnya →
+    </a>
+    {% else %}
+    <span class="disabled">Berikutnya →</span>
+    {% endif %}
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
