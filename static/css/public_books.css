@@ -65,8 +65,18 @@ button:hover {
     color: #fff;
 }
 
+button:disabled {
+    cursor: wait;
+    opacity: 0.6;
+}
+
 .results-heading {
     margin: 22px 0 0;
+}
+
+.provider-note {
+    color: var(--muted);
+    font-weight: 400;
 }
 
 .grid {
@@ -176,6 +186,24 @@ button:hover {
     border-left: 4px solid var(--line);
 }
 
+.public-results-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 18px 0 6px;
+    border-top: 1px solid var(--line);
+}
+
+.public-results-count {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.load-more-button {
+    min-width: 150px;
+}
+
 .import-form {
     margin-top: 14px;
     padding-top: 12px;
@@ -216,5 +244,14 @@ button:hover {
 
     .grid {
         grid-template-columns: 1fr;
+    }
+
+    .public-results-controls {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .load-more-button {
+        width: 100%;
     }
 }
