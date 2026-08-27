@@ -114,6 +114,21 @@ button:hover {
     border-left: 4px solid var(--red);
 }
 
+.error strong,
+.error span {
+    display: block;
+}
+
+.error strong {
+    margin-bottom: 3px;
+    color: var(--paper);
+}
+
+.error span {
+    color: var(--muted);
+    font-size: 14px;
+}
+
 .alert.success {
     color: var(--green);
     border-left: 4px solid var(--green);
