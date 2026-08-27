@@ -191,17 +191,41 @@ button:disabled {
     align-items: center;
     justify-content: space-between;
     gap: 18px;
+    min-height: 72px;
     padding: 18px 0 6px;
     border-top: 1px solid var(--line);
 }
 
-.public-results-count {
+.public-results-count,
+.infinite-scroll-sentinel {
     color: var(--muted);
     font-size: 13px;
 }
 
-.load-more-button {
-    min-width: 150px;
+.infinite-scroll-sentinel {
+    min-width: 220px;
+    text-align: right;
+}
+
+.infinite-scroll-sentinel[data-state="loading"]::before {
+    content: "";
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-right: 8px;
+    border: 1px solid currentColor;
+    vertical-align: 1px;
+    animation: public-books-loading 0.8s steps(2, end) infinite;
+}
+
+.infinite-scroll-sentinel[data-state="done"] {
+    color: var(--faint);
+}
+
+@keyframes public-books-loading {
+    50% {
+        opacity: 0.25;
+    }
 }
 
 .import-form {
@@ -247,11 +271,13 @@ button:disabled {
     }
 
     .public-results-controls {
-        align-items: stretch;
+        align-items: flex-start;
         flex-direction: column;
+        gap: 6px;
     }
 
-    .load-more-button {
-        width: 100%;
+    .infinite-scroll-sentinel {
+        min-width: 0;
+        text-align: left;
     }
 }
