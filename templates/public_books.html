@@ -9,7 +9,7 @@
 {% block header %}
 <header>
     <h1>BookVault - Public Book Search</h1>
-    <p>Open Library menjadi sumber utama. Jika layanan itu tidak merespons, BookVault mencoba sumber cadangan.</p>
+    <p>Open Library menjadi sumber utama. Jika layanan itu tidak merespons, BookVault otomatis mencoba Google Books.</p>
     <a href="/">← Kembali ke Katalog Lokal</a>
 </header>
 {% endblock %}
@@ -28,15 +28,18 @@
 
     {% if error %}
     <div class="error" id="api-error">
-        <strong>Open Library belum merespons.</strong>
-        <span>Mencoba sumber cadangan...</span>
+        <strong>API publik belum merespons.</strong>
+        <span>{{ error }}</span>
     </div>
     {% endif %}
 
     <div id="fallback-status" class="fallback-status" hidden></div>
 
     {% if keyword and not error %}
-    <p class="results-heading">Hasil pencarian untuk: <b>{{ keyword }}</b></p>
+    <p class="results-heading">
+        Hasil pencarian untuk: <b>{{ keyword }}</b>
+        {% if provider %}<span class="provider-note">· {{ provider }}</span>{% endif %}
+    </p>
     {% endif %}
 
     <div class="grid" id="public-results">
@@ -52,15 +55,16 @@
 
             <h2>{{ book.title }}</h2>
             <p>{{ book.author }}</p>
-            <p>Tahun: {{ book.year }}</p>
+            <p>Tahun: {{ book.year or '-' }}</p>
             <p>Jumlah edisi: {{ book.edition_count }}</p>
-            <p class="source-note">Sumber: Open Library</p>
+            <p class="source-note">Sumber: {{ book.source }}</p>
 
             {% if session.get("admin_logged_in") %}
             <form method="POST" action="/admin/import-book" class="import-form">
                 <input type="hidden" name="title" value="{{ book.title }}">
                 <input type="hidden" name="author" value="{{ book.author }}">
                 <input type="hidden" name="cover_url" value="{{ book.cover_url }}">
+                <input type="hidden" name="source" value="{{ book.source }}">
 
                 <input type="text" name="year" value="{{ book.year }}" placeholder="Tahun" class="import-year" required>
                 <input type="text" name="genre" placeholder="Masukkan genre..." class="import-genre" required>
