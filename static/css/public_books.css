@@ -27,6 +27,16 @@ a:hover {
     text-decoration-color: var(--brass);
 }
 
+.public-search-form {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.public-search-form input {
+    flex: 1 1 280px;
+}
+
 input,
 button {
     min-height: 40px;
@@ -55,6 +65,10 @@ button:hover {
     color: #fff;
 }
 
+.results-heading {
+    margin: 22px 0 0;
+}
+
 .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
@@ -62,6 +76,10 @@ button:hover {
     margin-top: 24px;
     border-top: 1px solid var(--line-soft);
     border-left: 1px solid var(--line-soft);
+}
+
+.grid:empty {
+    display: none;
 }
 
 .card {
@@ -95,13 +113,24 @@ button:hover {
     line-height: 1.15;
 }
 
-.meta {
+.card p {
+    margin: 6px 0;
+}
+
+.meta,
+.source-note {
     color: var(--muted);
     font-size: 13px;
 }
 
+.source-note {
+    padding-top: 8px;
+    border-top: 1px solid var(--line-soft);
+}
+
 .error,
-.alert {
+.alert,
+.fallback-status {
     margin-top: 18px;
     padding: 11px 14px;
     border: 1px solid var(--line);
@@ -109,7 +138,8 @@ button:hover {
 }
 
 .error,
-.alert.error {
+.alert.error,
+.fallback-status--error {
     color: var(--red);
     border-left: 4px solid var(--red);
 }
@@ -129,7 +159,8 @@ button:hover {
     font-size: 14px;
 }
 
-.alert.success {
+.alert.success,
+.fallback-status--success {
     color: var(--green);
     border-left: 4px solid var(--green);
 }
@@ -139,13 +170,27 @@ button:hover {
     border-left: 4px solid #8a6800;
 }
 
-.import-form {
-    margin-top: 12px;
+.fallback-status--info,
+.fallback-status--empty {
+    color: var(--muted);
+    border-left: 4px solid var(--line);
 }
 
+.import-form {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line-soft);
+}
+
+.import-year,
 .import-genre {
     width: 100%;
-    margin: 10px 0;
+    margin: 8px 0 0;
+}
+
+.import-form button {
+    width: 100%;
+    margin-top: 8px;
 }
 
 .api-cover-placeholder {
@@ -162,6 +207,11 @@ button:hover {
 @media (max-width: 720px) {
     header {
         padding: 18px 24px;
+    }
+
+    .public-search-form {
+        display: grid;
+        grid-template-columns: 1fr;
     }
 
     .grid {
