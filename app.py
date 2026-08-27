@@ -924,10 +924,19 @@ def public_books():
         url = "https://openlibrary.org/search.json"
         params = {
             "q": keyword,
-            "limit": 12
+            "limit": 12,
+            "fields": "title,author_name,first_publish_year,edition_count,cover_i"
+        }
+        headers = {
+            "User-Agent": "BookVault/1.0 (+https://github.com/panjiaryasoma/bookvault-flask)"
         }
 
-        response = requests.get(url, params=params, timeout=10)
+        response = requests.get(
+            url,
+            params=params,
+            headers=headers,
+            timeout=(5, 25)
+        )
         response.raise_for_status()
 
         data = response.json()
@@ -947,8 +956,19 @@ def public_books():
                 "cover_url": cover_url
             })
 
-    except Exception as e:
-        error = f"Gagal mengambil data dari Open Library API: {str(e)}"
+    except requests.Timeout:
+        error = (
+            "Open Library sedang lambat atau tidak merespons. "
+            "Silakan coba pencarian kembali."
+        )
+    except requests.RequestException:
+        error = (
+            "Data dari Open Library sementara tidak dapat diakses. "
+            "Silakan coba lagi beberapa saat."
+        )
+    except Exception:
+        app.logger.exception("Unexpected error while requesting Open Library")
+        error = "Terjadi kesalahan saat membaca respons Open Library. Silakan coba lagi."
 
     return render_template(
         "public_books.html",
