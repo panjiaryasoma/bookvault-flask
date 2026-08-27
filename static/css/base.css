@@ -1,20 +1,18 @@
 :root {
-    --bg: #15110d;
-    --bg-deep: #0f0c09;
-    --surface: #211a13;
-    --surface-soft: #2a2118;
-    --paper: #f0e6d2;
-    --muted: #b9aa93;
-    --faint: #817360;
-    --line: #5d4a32;
-    --line-soft: rgba(168, 134, 82, 0.24);
-    --brass: #c6a15b;
-    --brass-soft: #8d6f3d;
+    --bg: #17130f;
+    --surface: #211b14;
+    --surface-soft: #282117;
+    --paper: #eee6d8;
+    --muted: #b8ad9d;
+    --faint: #81776a;
+    --line: #3f3426;
+    --line-soft: #2f281f;
+    --brass: #b79652;
+    --brass-soft: #8f743e;
     --green: #93aa7b;
     --red: #b8756d;
-    --radius: 4px;
-    --radius-sm: 3px;
-    --shell: 1160px;
+    --radius: 2px;
+    --shell: 1120px;
 }
 
 * {
@@ -28,16 +26,11 @@ html {
 body {
     min-height: 100%;
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    background:
-        linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255, 255, 255, 0.014) 1px, transparent 1px),
-        radial-gradient(circle at 20% -10%, rgba(198, 161, 91, 0.12), transparent 28%),
-        linear-gradient(180deg, var(--bg), var(--bg-deep));
-    background-size: 38px 38px, 38px 38px, auto, auto;
+    background: var(--bg);
     color: var(--paper);
     margin: 0;
     padding: 0;
-    line-height: 1.6;
+    line-height: 1.55;
 }
 
 a {
@@ -63,7 +56,7 @@ button {
 .container {
     width: min(var(--shell), calc(100% - 40px));
     margin: 0 auto;
-    padding: 34px 0 56px;
+    padding: 28px 0 48px;
 }
 
 .skip-link {
@@ -71,10 +64,10 @@ button {
     top: 12px;
     left: 14px;
     z-index: 1000;
-    padding: 9px 12px;
-    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    border-radius: var(--radius);
     background: var(--brass);
-    color: var(--bg-deep);
+    color: var(--bg);
     font-weight: 700;
     transform: translateY(-160%);
 }
@@ -84,14 +77,14 @@ button {
 }
 
 .flash-container {
-    margin-bottom: 20px;
+    margin-bottom: 18px;
 }
 
 .flash {
-    padding: 12px 16px;
-    border-radius: var(--radius-sm);
+    padding: 11px 14px;
+    border-radius: var(--radius);
     margin-bottom: 12px;
-    border: 1px solid var(--line-soft);
+    border: 1px solid var(--line);
     background: var(--surface);
     font-weight: 700;
 }
@@ -121,6 +114,6 @@ button {
 @media (max-width: 768px) {
     .container {
         width: min(100% - 28px, var(--shell));
-        padding: 24px 0 42px;
+        padding: 22px 0 38px;
     }
 }
