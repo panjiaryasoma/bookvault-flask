@@ -1,17 +1,17 @@
 :root {
-    --bg: #17130f;
-    --surface: #211b14;
-    --surface-soft: #282117;
-    --paper: #eee6d8;
-    --muted: #b8ad9d;
-    --faint: #81776a;
-    --line: #3f3426;
-    --line-soft: #2f281f;
-    --brass: #b79652;
-    --brass-soft: #8f743e;
-    --green: #93aa7b;
-    --red: #b8756d;
-    --radius: 2px;
+    --bg: #f2efe8;
+    --surface: #faf8f3;
+    --surface-soft: #e9e4da;
+    --paper: #171717;
+    --muted: #5f5a52;
+    --faint: #928b81;
+    --line: #1f1f1f;
+    --line-soft: #d7d0c5;
+    --brass: #a33a32;
+    --brass-soft: #7f2e29;
+    --green: #2f7d4a;
+    --red: #b63b34;
+    --radius: 0px;
     --shell: 1120px;
 }
 
@@ -21,6 +21,7 @@
 
 html {
     min-height: 100%;
+    color-scheme: light;
 }
 
 body {
@@ -34,12 +35,12 @@ body {
 }
 
 a {
-    color: var(--brass);
+    color: var(--paper);
     text-decoration: none;
 }
 
 a:hover {
-    color: var(--paper);
+    color: var(--brass);
 }
 
 button,
@@ -65,9 +66,9 @@ button {
     left: 14px;
     z-index: 1000;
     padding: 8px 10px;
-    border-radius: var(--radius);
-    background: var(--brass);
-    color: var(--bg);
+    border-radius: 0;
+    background: var(--paper);
+    color: var(--surface);
     font-weight: 700;
     transform: translateY(-160%);
 }
@@ -82,7 +83,7 @@ button {
 
 .flash {
     padding: 11px 14px;
-    border-radius: var(--radius);
+    border-radius: 0;
     margin-bottom: 12px;
     border: 1px solid var(--line);
     background: var(--surface);
@@ -98,7 +99,7 @@ button {
 }
 
 .flash.warning {
-    color: var(--brass);
+    color: #8a6800;
 }
 
 .flash.info {
