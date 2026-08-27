@@ -17,6 +17,7 @@
     let totalAvailable = null;
     let loading = false;
     let exhausted = false;
+    let observer = null;
 
     const setStatus = (message, state = "info") => {
         statusBox.hidden = false;
@@ -220,17 +221,17 @@
     const countLabel = document.createElement("span");
     countLabel.className = "public-results-count";
 
-    const loadMoreButton = document.createElement("button");
-    loadMoreButton.type = "button";
-    loadMoreButton.className = "load-more-button";
-    loadMoreButton.textContent = `Muat ${PAGE_SIZE} lagi`;
+    const sentinel = document.createElement("div");
+    sentinel.className = "infinite-scroll-sentinel";
+    sentinel.setAttribute("aria-live", "polite");
 
     controls.appendChild(countLabel);
-    controls.appendChild(loadMoreButton);
+    controls.appendChild(sentinel);
     results.insertAdjacentElement("afterend", controls);
 
     const updateControls = () => {
         const loaded = getLoadedCount();
+        const reachedKnownTotal = totalAvailable !== null && loaded >= totalAvailable;
 
         if (totalAvailable !== null) {
             countLabel.textContent = `${loaded} dari ${totalAvailable} hasil dimuat`;
@@ -238,10 +239,20 @@
             countLabel.textContent = `${loaded} hasil dimuat`;
         }
 
-        const reachedKnownTotal = totalAvailable !== null && loaded >= totalAvailable;
-        loadMoreButton.hidden = exhausted || reachedKnownTotal || loaded === 0;
-        loadMoreButton.disabled = loading;
-        loadMoreButton.textContent = loading ? "Memuat..." : `Muat ${PAGE_SIZE} lagi`;
+        if (loading) {
+            sentinel.textContent = "Memuat hasil berikutnya...";
+            sentinel.dataset.state = "loading";
+        } else if (exhausted || reachedKnownTotal) {
+            sentinel.textContent = loaded ? "Semua hasil yang tersedia sudah dimuat." : "Tidak ada hasil.";
+            sentinel.dataset.state = "done";
+
+            if (observer) {
+                observer.unobserve(sentinel);
+            }
+        } else {
+            sentinel.textContent = "Scroll untuk memuat hasil berikutnya";
+            sentinel.dataset.state = "ready";
+        }
     };
 
     const requestPage = async (preferredProvider, offset) => {
@@ -262,12 +273,18 @@
             return;
         }
 
+        const loadedBefore = getLoadedCount();
+        if (totalAvailable !== null && loadedBefore >= totalAvailable) {
+            exhausted = true;
+            updateControls();
+            return;
+        }
+
         loading = true;
         updateControls();
 
         try {
-            const offset = getLoadedCount();
-            const page = await requestPage(provider || "openlibrary", offset);
+            const page = await requestPage(provider || "openlibrary", loadedBefore);
 
             provider = page.provider;
             totalAvailable = page.total;
@@ -288,7 +305,7 @@
         } catch (error) {
             console.error("Could not load additional public books:", error);
             setStatus(
-                "Hasil tambahan belum dapat dimuat. Coba lagi beberapa saat.",
+                "Hasil tambahan belum dapat dimuat. Scroll keluar lalu kembali ke bawah untuk mencoba lagi.",
                 "error"
             );
         } finally {
@@ -327,6 +344,7 @@
             }
         } catch (error) {
             console.error("All browser public-book fallbacks failed:", error);
+            exhausted = true;
             setStatus(
                 "Semua sumber buku publik sedang tidak dapat diakses. Periksa koneksi internet lalu coba lagi.",
                 "error"
@@ -336,10 +354,23 @@
         }
     };
 
-    loadMoreButton.addEventListener("click", appendNextPage);
+    observer = new IntersectionObserver(
+        (entries) => {
+            const entry = entries[0];
+            if (entry && entry.isIntersecting) {
+                appendNextPage();
+            }
+        },
+        {
+            root: null,
+            rootMargin: "500px 0px",
+            threshold: 0.01
+        }
+    );
 
     provider = detectInitialProvider();
     updateControls();
+    observer.observe(sentinel);
 
     if (hasServerError || getLoadedCount() === 0) {
         loadBrowserFallback();
