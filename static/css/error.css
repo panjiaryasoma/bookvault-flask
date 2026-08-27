@@ -1,71 +1,77 @@
-body {
-    font-family: Georgia, serif;
-    background: #16130f;
-    color: #f3ead7;
-    margin: 0;
-    padding: 0;
-}
-
 .error-page {
     min-height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 40px;
-    box-sizing: border-box;
 }
 
 .error-card {
-    max-width: 620px;
-    background: #211b14;
-    border: 1px solid #6b4f2a;
-    border-radius: 18px;
-    padding: 42px;
-    text-align: center;
+    width: min(620px, 100%);
+    padding: 28px 0;
+    border-top: 4px solid var(--line);
+    border-bottom: 1px solid var(--line-soft);
+    background: transparent;
+    text-align: left;
 }
 
 .error-card h1 {
-    color: #d4af37;
-    font-size: 90px;
     margin: 0;
-    letter-spacing: 4px;
+    color: var(--paper);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(64px, 12vw, 96px);
+    line-height: 0.95;
+    letter-spacing: -0.05em;
 }
 
 .error-card h2 {
-    color: #f3ead7;
-    margin: 12px 0;
-    font-size: 28px;
+    margin: 14px 0 10px;
+    color: var(--paper);
+    font-size: 26px;
 }
 
 .error-card p {
-    color: #c8bfae;
-    line-height: 1.7;
-    margin-bottom: 28px;
+    max-width: 520px;
+    margin: 0 0 26px;
+    color: var(--muted);
+    line-height: 1.65;
 }
 
 .actions {
     display: flex;
-    gap: 14px;
-    justify-content: center;
+    gap: 12px;
     flex-wrap: wrap;
 }
 
 .btn {
     display: inline-block;
-    padding: 12px 16px;
-    border-radius: 8px;
-    background: #d4af37;
-    color: #16130f;
-    font-weight: bold;
+    padding: 9px 14px;
+    border: 2px solid var(--line);
+    background: var(--paper);
+    color: var(--surface);
+    font-weight: 700;
     text-decoration: none;
 }
 
-.btn.secondary {
-    background: #3a3025;
-    color: #d4af37;
-    border: 1px solid #d4af37;
+.btn:hover {
+    border-color: var(--brass);
+    background: var(--brass);
+    color: #fff;
 }
 
-.btn:hover {
-    opacity: 0.9;
+.btn.secondary {
+    background: transparent;
+    color: var(--paper);
+}
+
+.btn.secondary:hover {
+    background: var(--paper);
+    border-color: var(--paper);
+    color: var(--surface);
+}
+
+@media (max-width: 620px) {
+    .error-page {
+        padding: 24px;
+    }
 }
