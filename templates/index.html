@@ -11,7 +11,7 @@
     <div class="library-header__inner">
         <div class="brand-block">
             <a href="/" class="brand-mark">BookVault</a>
-            <span class="brand-meta">Flask catalog · SQLite archive · REST API</span>
+            <span class="brand-meta">Katalog buku Flask</span>
         </div>
 
         <nav class="top-nav" aria-label="Navigasi BookVault">
@@ -37,68 +37,55 @@
 {% endblock %}
 
 {% block content %}
-<section class="catalog-intro" aria-labelledby="catalog-title">
-    <div class="intro-copy">
-        <p class="small-label">Local Library System</p>
-        <h1 id="catalog-title">Rak buku lokal yang bisa dicari, difilter, dan diuji lewat API.</h1>
-        <p>
-            BookVault menyimpan koleksi buku lokal, membaca data publik dari Open Library,
-            dan menyediakan endpoint JSON untuk kebutuhan pengujian backend.
-        </p>
+<section class="catalog-summary" aria-labelledby="catalog-title">
+    <div>
+        <h1 id="catalog-title">Katalog Buku</h1>
+        <p>Cari buku lokal, filter berdasarkan genre, lalu buka detail atau simpan ke favorit.</p>
     </div>
+
+    {% if pagination %}
+    <p class="result-count">{{ books|length }} dari {{ pagination.total }} buku</p>
+    {% else %}
+    <p class="result-count">{{ books|length }} buku</p>
+    {% endif %}
 </section>
 
 {% if session.get("user_logged_in") %}
 <section class="session-note">
-    Masuk sebagai user <strong>{{ session.get("user_username") }}</strong>. Buku favorit dapat dikelola dari kartu katalog.
+    Masuk sebagai user <strong>{{ session.get("user_username") }}</strong>.
 </section>
 {% elif session.get("admin_logged_in") %}
 <section class="session-note">
-    Masuk sebagai admin <strong>{{ session.get("admin_username") }}</strong>. Kelola data lengkap dari dashboard admin.
+    Masuk sebagai admin <strong>{{ session.get("admin_username") }}</strong>.
 </section>
 {% endif %}
 
-<section class="catalog-panel" aria-label="Panel katalog lokal">
-    <div class="catalog-panel__head">
-        <div>
-            <p class="small-label">Archive Index</p>
-            <h2>Katalog lokal</h2>
-        </div>
+<form method="GET" action="/" class="search-box" aria-label="Cari dan filter katalog buku">
+    <label>
+        <span>Cari buku</span>
+        <input type="text" name="q" placeholder="Judul atau penulis" value="{{ q }}">
+    </label>
 
-        {% if pagination %}
-        <p class="count-chip">{{ books|length }} / {{ pagination.total }} buku</p>
-        {% else %}
-        <p class="count-chip">{{ books|length }} buku</p>
-        {% endif %}
-    </div>
+    <label>
+        <span>Genre</span>
+        <select name="genre" class="genre-select">
+            <option value="">Semua Genre</option>
+            {% for g in genres %}
+            <option value="{{ g }}" {% if selected_genre == g %}selected{% endif %}>
+                {{ g }}
+            </option>
+            {% endfor %}
+        </select>
+    </label>
 
-    <form method="GET" action="/" class="search-box" aria-label="Cari dan filter katalog buku">
-        <label>
-            <span>Cari buku</span>
-            <input type="text" name="q" placeholder="Judul atau penulis" value="{{ q }}">
-        </label>
+    <button type="submit">Cari</button>
+</form>
 
-        <label>
-            <span>Genre</span>
-            <select name="genre" class="genre-select">
-                <option value="">Semua Genre</option>
-                {% for g in genres %}
-                <option value="{{ g }}" {% if selected_genre == g %}selected{% endif %}>
-                    {{ g }}
-                </option>
-                {% endfor %}
-            </select>
-        </label>
-
-        <button type="submit">Cari</button>
-    </form>
-
+<section class="catalog-list" aria-label="Daftar katalog buku">
     <div class="grid">
         {% for book in books %}
-        <article class="card book-card">
-            <div class="book-spine" aria-hidden="true"></div>
-
-            <div class="book-card__media">
+        <article class="book-card">
+            <a href="/book/{{ book.id }}" class="book-card__media" aria-label="Lihat detail {{ book.title }}">
                 {% if book.cover_image %}
                 <img src="{{ book.cover_image }}" alt="Cover {{ book.title }}" class="book-cover">
                 {% else %}
@@ -106,14 +93,13 @@
                     <span>No Cover</span>
                 </div>
                 {% endif %}
-            </div>
+            </a>
 
             <div class="book-card__body">
-                <div class="book-code">BV-{{ book.id }} · {{ book.genre }}</div>
-                <h3>{{ book.title }}</h3>
+                <h2>{{ book.title }}</h2>
 
                 <div class="meta">
-                    {{ book.author }} · {{ book.year }}
+                    {{ book.author }} · {{ book.year }} · {{ book.genre }}
                 </div>
 
                 <p class="description">{{ book.description }}</p>
@@ -123,22 +109,22 @@
                 {% else %}
                 <p class="rating rating--muted">Belum dinilai</p>
                 {% endif %}
-            </div>
 
-            <div class="book-card__actions">
-                <a href="/book/{{ book.id }}" class="detail-link">Detail</a>
+                <div class="book-card__actions">
+                    <a href="/book/{{ book.id }}" class="detail-link">Lihat Detail</a>
 
-                {% if session.get("user_logged_in") %}
-                    {% if book.id in favorite_ids %}
-                    <form method="POST" action="/favorite/remove/{{ book.id }}" class="favorite-form">
-                        <button type="submit" class="btn-favorited">Hapus Favorit</button>
-                    </form>
-                    {% else %}
-                    <form method="POST" action="/favorite/add/{{ book.id }}" class="favorite-form">
-                        <button type="submit">Favorit</button>
-                    </form>
+                    {% if session.get("user_logged_in") %}
+                        {% if book.id in favorite_ids %}
+                        <form method="POST" action="/favorite/remove/{{ book.id }}" class="favorite-form">
+                            <button type="submit" class="btn-favorited">Hapus Favorit</button>
+                        </form>
+                        {% else %}
+                        <form method="POST" action="/favorite/add/{{ book.id }}" class="favorite-form">
+                            <button type="submit">Favorit</button>
+                        </form>
+                        {% endif %}
                     {% endif %}
-                {% endif %}
+                </div>
             </div>
         </article>
         {% endfor %}
