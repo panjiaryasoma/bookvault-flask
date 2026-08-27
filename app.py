@@ -18,7 +18,7 @@ BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + os.path.join(BASE_DIR, "bookvault.db")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["SECRET_KEY"] = "bookvault-secret-key"
+app.config["SECRET_KEY"] = os.getenv("BOOKVAULT_SECRET_KEY", "bookvault-secret-key")
 app.config["API_KEY"] = os.getenv("BOOKVAULT_API_KEY")
 
 if not app.config["API_KEY"]:
@@ -26,9 +26,11 @@ if not app.config["API_KEY"]:
 
 db = SQLAlchemy(app)
 
+
 def set_alert(message, category="success"):
     session["alert_message"] = message
     session["alert_category"] = category
+
 
 def login_required(f):
     @wraps(f)
@@ -46,6 +48,7 @@ def login_required(f):
             return redirect("/login")
 
         return f(*args, **kwargs)
+
     return wrapper
 
 
@@ -65,7 +68,9 @@ def admin_required(f):
             return redirect("/admin/login")
 
         return f(*args, **kwargs)
+
     return wrapper
+
 
 def api_key_required(f):
     @wraps(f)
@@ -79,7 +84,9 @@ def api_key_required(f):
             }), 401
 
         return f(*args, **kwargs)
+
     return wrapper
+
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -120,6 +127,7 @@ class Book(db.Model):
             "updated_at": self.updated_at.strftime("%Y-%m-%d %H:%M:%S")
         }
 
+
 class Favorite(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
@@ -128,6 +136,8 @@ class Favorite(db.Model):
 
     user = db.relationship("User", backref="favorites")
     book = db.relationship("Book", backref="favorited_by")
+
+
 def seed_data():
     if User.query.first() is None:
         admin = User(username="admin", role="admin")
@@ -185,10 +195,114 @@ def seed_data():
                 description="Thriller Jepang tentang balas dendam dan rahasia di sekolah."
             )
         ]
-
         db.session.add_all(books)
 
     db.session.commit()
+
+
+def _normalize_year(raw_value):
+    if raw_value is None:
+        return ""
+
+    value = str(raw_value).strip()
+    if len(value) >= 4 and value[:4].isdigit():
+        return value[:4]
+
+    return ""
+
+
+def _fetch_open_library(keyword):
+    url = "https://openlibrary.org/search.json"
+    params = {
+        "q": keyword,
+        "limit": 12,
+        "fields": "title,author_name,first_publish_year,edition_count,cover_i"
+    }
+    headers = {
+        "User-Agent": "BookVault/1.0 (+https://github.com/panjiaryasoma/bookvault-flask)",
+        "Accept": "application/json"
+    }
+
+    response = requests.get(
+        url,
+        params=params,
+        headers=headers,
+        timeout=(3, 7)
+    )
+    response.raise_for_status()
+
+    data = response.json()
+    books = []
+
+    for item in data.get("docs", []):
+        cover_id = item.get("cover_i")
+        cover_url = (
+            f"https://covers.openlibrary.org/b/id/{cover_id}-M.jpg"
+            if cover_id else ""
+        )
+
+        authors = item.get("author_name") or ["Tidak diketahui"]
+
+        books.append({
+            "title": item.get("title", "Tanpa Judul"),
+            "author": ", ".join(authors),
+            "year": _normalize_year(item.get("first_publish_year")),
+            "edition_count": item.get("edition_count", 0),
+            "cover_url": cover_url,
+            "source": "Open Library"
+        })
+
+    return books
+
+
+def _fetch_google_books(keyword):
+    url = "https://www.googleapis.com/books/v1/volumes"
+    params = {
+        "q": keyword,
+        "maxResults": 12,
+        "printType": "books"
+    }
+
+    google_api_key = os.getenv("GOOGLE_BOOKS_API_KEY")
+    if google_api_key:
+        params["key"] = google_api_key
+
+    headers = {
+        "Accept": "application/json",
+        "User-Agent": "BookVault/1.0"
+    }
+
+    response = requests.get(
+        url,
+        params=params,
+        headers=headers,
+        timeout=(3, 9)
+    )
+    response.raise_for_status()
+
+    data = response.json()
+    books = []
+
+    for item in data.get("items", []):
+        info = item.get("volumeInfo") or {}
+        image_links = info.get("imageLinks") or {}
+        cover_url = image_links.get("thumbnail") or image_links.get("smallThumbnail") or ""
+
+        if cover_url.startswith("http://"):
+            cover_url = "https://" + cover_url[len("http://"):]
+
+        authors = info.get("authors") or ["Tidak diketahui"]
+
+        books.append({
+            "title": info.get("title", "Tanpa Judul"),
+            "author": ", ".join(authors),
+            "year": _normalize_year(info.get("publishedDate")),
+            "edition_count": "-",
+            "cover_url": cover_url,
+            "source": "Google Books"
+        })
+
+    return books
 
 
 @app.route("/api/health", methods=["GET"])
@@ -225,12 +339,10 @@ def get_books():
 
 @app.route("/api/books/<int:book_id>", methods=["GET"])
 def get_book(book_id):
-    book = Book.query.get(book_id)
+    book = db.session.get(Book, book_id)
 
     if not book:
-        return jsonify({
-            "error": "Book not found"
-        }), 404
+        return jsonify({"error": "Book not found"}), 404
 
     return jsonify(book.to_dict()), 200
 
@@ -238,12 +350,10 @@ def get_book(book_id):
 @app.route("/api/books", methods=["POST"])
 @api_key_required
 def create_book():
-    data = request.get_json()
+    data = request.get_json(silent=True)
 
     if not data:
-        return jsonify({
-        "error": "Invalid JSON body"
-    }), 400
+        return jsonify({"error": "Invalid JSON body"}), 400
 
     title = str(data.get("title", "")).strip()
     author = str(data.get("author", "")).strip()
@@ -254,16 +364,12 @@ def create_book():
     cover_image = str(data.get("cover_image", "")).strip()
 
     missing = []
-
     if not title:
         missing.append("title")
-
     if not author:
         missing.append("author")
-
     if not genre:
         missing.append("genre")
-
     if not year_raw:
         missing.append("year")
 
@@ -275,13 +381,13 @@ def create_book():
 
     try:
         year_value = int(year_raw)
-    except ValueError:
+    except (TypeError, ValueError):
         return jsonify({
             "error": "Invalid year",
             "message": "Year must be a number"
         }), 400
-    current_year = datetime.now().year
 
+    current_year = datetime.now().year
     if year_value < 1000 or year_value > current_year:
         return jsonify({
             "error": "Invalid year",
@@ -290,11 +396,12 @@ def create_book():
 
     try:
         rating_value = float(rating_raw) if rating_raw else 0
-    except ValueError:
+    except (TypeError, ValueError):
         return jsonify({
             "error": "Invalid rating",
             "message": "Rating must be a number"
         }), 400
+
     if rating_value < 0 or rating_value > 5:
         return jsonify({
             "error": "Invalid rating",
@@ -334,19 +441,14 @@ def create_book():
 @app.route("/api/books/<int:book_id>", methods=["PUT"])
 @api_key_required
 def update_book(book_id):
-    book = Book.query.get(book_id)
+    book = db.session.get(Book, book_id)
 
     if not book:
-        return jsonify({
-            "error": "Book not found"
-        }), 404
+        return jsonify({"error": "Book not found"}), 404
 
-    data = request.get_json()
-
+    data = request.get_json(silent=True)
     if not data:
-        return jsonify({
-            "error": "Invalid JSON body"
-        }), 400
+        return jsonify({"error": "Invalid JSON body"}), 400
 
     new_title = str(data.get("title", book.title)).strip()
     new_author = str(data.get("author", book.author)).strip()
@@ -355,13 +457,10 @@ def update_book(book_id):
     new_cover_image = str(data.get("cover_image", book.cover_image or "")).strip()
 
     missing = []
-
     if not new_title:
         missing.append("title")
-
     if not new_author:
         missing.append("author")
-
     if not new_genre:
         missing.append("genre")
 
@@ -371,35 +470,28 @@ def update_book(book_id):
             "missing_fields": missing
         }), 400
 
-    if "year" in data:
-        try:
-            year_value = int(data["year"])
-        except ValueError:
-            return jsonify({
-                "error": "Invalid year",
-                "message": "Year must be a number"
-            }), 400
-    else:
-        year_value = book.year
+    try:
+        year_value = int(data["year"]) if "year" in data else book.year
+    except (TypeError, ValueError):
+        return jsonify({
+            "error": "Invalid year",
+            "message": "Year must be a number"
+        }), 400
 
     current_year = datetime.now().year
-
     if year_value < 1000 or year_value > current_year:
         return jsonify({
             "error": "Invalid year",
             "message": f"Year must be between 1000 and {current_year}"
         }), 400
 
-    if "rating" in data:
-        try:
-            rating_value = float(data["rating"])
-        except ValueError:
-            return jsonify({
-                "error": "Invalid rating",
-                "message": "Rating must be a number"
-            }), 400
-    else:
-        rating_value = book.rating
+    try:
+        rating_value = float(data["rating"]) if "rating" in data else book.rating
+    except (TypeError, ValueError):
+        return jsonify({
+            "error": "Invalid rating",
+            "message": "Rating must be a number"
+        }), 400
 
     if rating_value < 0 or rating_value > 5:
         return jsonify({
@@ -438,21 +530,17 @@ def update_book(book_id):
 @app.route("/api/books/<int:book_id>", methods=["DELETE"])
 @api_key_required
 def delete_book(book_id):
-    book = Book.query.get(book_id)
+    book = db.session.get(Book, book_id)
 
     if not book:
-        return jsonify({
-            "error": "Book not found"
-        }), 404
+        return jsonify({"error": "Book not found"}), 404
 
     Favorite.query.filter_by(book_id=book.id).delete()
-
     db.session.delete(book)
     db.session.commit()
 
-    return jsonify({
-        "message": "Book deleted successfully"
-    }), 200
+    return jsonify({"message": "Book deleted successfully"}), 200
+
 
 @app.route("/api/docs", methods=["GET"])
 @admin_required
@@ -498,6 +586,7 @@ def api_docs():
 
     return render_template("api_docs.html", endpoints=endpoints)
 
+
 @app.route("/", methods=["GET"])
 def index():
     q = request.args.get("q", "").strip()
@@ -536,7 +625,6 @@ def index():
 
     if session.get("user_logged_in"):
         user = User.query.filter_by(username=session.get("user_username")).first()
-
         if user:
             favorite_ids = [
                 favorite.book_id
@@ -553,14 +641,16 @@ def index():
         pagination=pagination
     )
 
+
 @app.route("/book/<int:book_id>", methods=["GET"])
 def book_detail(book_id):
-    book = Book.query.get(book_id)
+    book = db.session.get(Book, book_id)
 
     if not book:
-        return "Buku tidak ditemukan", 404
+        return render_template("404.html"), 404
 
     return render_template("detail.html", book=book)
+
 
 @app.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
@@ -588,6 +678,7 @@ def admin_logout():
     session.clear()
     set_alert("Logout admin berhasil.", "success")
     return redirect("/admin/login")
+
 
 @app.route("/admin", methods=["GET"])
 @admin_required
@@ -623,7 +714,6 @@ def admin_dashboard():
         .filter(Book.rating > 0)
         .scalar()
     )
-
     avg_rating = round(avg_rating_value or 0, 2)
 
     genre_raw = (
@@ -634,7 +724,7 @@ def admin_dashboard():
         .all()
     )
 
-    max_genre_count = max([total for genre, total in genre_raw], default=1)
+    max_genre_count = max([total for _genre, total in genre_raw], default=1)
 
     genre_stats = [
         {
@@ -677,78 +767,62 @@ def admin_dashboard():
     )
 
 
+def _validate_admin_book_form(form):
+    title = form.get("title", "").strip()
+    author = form.get("author", "").strip()
+    genre = form.get("genre", "").strip()
+    year_raw = form.get("year", "").strip()
+    rating_raw = form.get("rating", "0").strip()
+    description = form.get("description", "").strip()
+
+    if not title or not author or not genre or not year_raw:
+        return None, "Judul, penulis, genre, dan tahun wajib diisi."
+
+    try:
+        year_value = int(year_raw)
+    except ValueError:
+        return None, "Tahun harus berupa angka."
+
+    current_year = datetime.now().year
+    if year_value < 1000 or year_value > current_year:
+        return None, f"Tahun harus berada di antara 1000 sampai {current_year}."
+
+    try:
+        rating_value = float(rating_raw) if rating_raw else 0
+    except ValueError:
+        return None, "Rating harus berupa angka."
+
+    if rating_value < 0 or rating_value > 5:
+        return None, "Rating harus berada di antara 0 sampai 5."
+
+    return {
+        "title": title,
+        "author": author,
+        "genre": genre,
+        "year": year_value,
+        "rating": rating_value,
+        "description": description
+    }, None
+
+
 @app.route("/admin/book/add", methods=["GET", "POST"])
 @admin_required
 def admin_add_book():
-
     if request.method == "POST":
-        title = request.form.get("title", "").strip()
-        author = request.form.get("author", "").strip()
-        genre = request.form.get("genre", "").strip()
-        year = request.form.get("year", "").strip()
-        rating = request.form.get("rating", "0").strip()
-        description = request.form.get("description", "").strip()
+        data, error = _validate_admin_book_form(request.form)
 
-        if not title or not author or not genre or not year:
-            set_alert("Judul, penulis, genre, dan tahun wajib diisi.", "error")
+        if error:
+            set_alert(error, "error")
             return render_template(
                 "admin_form.html",
                 title="Tambah Buku",
                 book=None,
                 error=None
             )
-
-        try:
-            year_value = int(year)
-        except ValueError:
-            set_alert("Tahun harus berupa angka.", "error")
-            return render_template(
-                "admin_form.html",
-                title="Tambah Buku",
-                book=None,
-                error=None
-            )
-        current_year = datetime.now().year
-
-        if year_value < 1000 or year_value > current_year:
-            set_alert(
-                f"Tahun harus berada di antara 1000 sampai {current_year}.",
-                "error"
-            )
-
-            return render_template(
-                "admin_form.html",
-                title="Tambah Buku",
-                book=None,
-                error=None
-            )
-
-        try:
-            rating_value = float(rating) if rating else 0
-        except ValueError:
-            set_alert("Rating harus berupa angka.", "error")
-            return render_template(
-                "admin_form.html",
-                title="Tambah Buku",
-                book=None,
-                error=None
-            )
-        if rating_value < 0 or rating_value > 5:
-                set_alert(
-                    "Rating harus berada di antara 0 sampai 5.",
-                    "error"
-                )
-
-                return render_template(
-                    "admin_form.html",
-                    title="Tambah Buku",
-                    book=None,
-                    error=None
-                )
 
         existing_book = Book.query.filter(
-            Book.title.ilike(title),
-            Book.author.ilike(author)
+            Book.title.ilike(data["title"]),
+            Book.author.ilike(data["author"])
         ).first()
 
         if existing_book:
@@ -760,15 +834,7 @@ def admin_add_book():
                 error=None
             )
 
-        new_book = Book(
-            title=title,
-            author=author,
-            genre=genre,
-            year=year_value,
-            rating=rating_value,
-            description=description
-        )
-
+        new_book = Book(**data)
         db.session.add(new_book)
         db.session.commit()
 
@@ -786,85 +852,28 @@ def admin_add_book():
 @app.route("/admin/book/edit/<int:book_id>", methods=["GET", "POST"])
 @admin_required
 def admin_edit_book(book_id):
-
-    book = Book.query.get(book_id)
+    book = db.session.get(Book, book_id)
 
     if not book:
         set_alert("Buku tidak ditemukan.", "error")
         return redirect("/admin")
 
     if request.method == "POST":
-        title = request.form.get("title", "").strip()
-        author = request.form.get("author", "").strip()
-        genre = request.form.get("genre", "").strip()
-        year = request.form.get("year", "").strip()
-        rating = request.form.get("rating", "0").strip()
-        description = request.form.get("description", "").strip()
+        data, error = _validate_admin_book_form(request.form)
 
-        if not title or not author or not genre or not year:
-            set_alert("Judul, penulis, genre, dan tahun wajib diisi.", "error")
+        if error:
+            set_alert(error, "error")
             return render_template(
                 "admin_form.html",
                 title="Edit Buku",
                 book=book,
-                error=None
-            )
-
-        try:
-            year_value = int(year)
-        except ValueError:
-            set_alert("Tahun harus berupa angka.", "error")
-            return render_template(
-                "admin_form.html",
-                title="Edit Buku",
-                book=book,
-                error=None
-            )
-        current_year = datetime.now().year
-
-        if year_value < 1000 or year_value > current_year:
-            set_alert(
-                f"Tahun harus berada di antara 1000 sampai {current_year}.",
-                "error"
-            )
-
-            return render_template(
-                "admin_form.html",
-                title="Tambah Buku",
-                book=None,
-                error=None
-            )
-        
-        try:
-            rating_value = float(rating) if rating else 0
-        except ValueError:
-            set_alert("Rating harus berupa angka.", "error")
-            return render_template(
-                "admin_form.html",
-                title="Edit Buku",
-                book=book,
-                error=None
-            )
-            
-        current_rating =  float(rating)
-        
-        if current_rating < 0 or current_rating > 5:
-            set_alert(
-                "Rating harus berada di antara 0 sampai 5.",
-                "error"
-            )
-
-            return render_template(
-                "admin_form.html",
-                title="Tambah Buku",
-                book=None,
                 error=None
             )
 
         existing_book = Book.query.filter(
             Book.id != book.id,
-            Book.title.ilike(title),
-            Book.author.ilike(author)
+            Book.title.ilike(data["title"]),
+            Book.author.ilike(data["author"])
         ).first()
 
         if existing_book:
@@ -876,12 +885,12 @@ def admin_edit_book(book_id):
                 error=None
             )
 
-        book.title = title
-        book.author = author
-        book.genre = genre
-        book.year = year_value
-        book.rating = rating_value
-        book.description = description
+        book.title = data["title"]
+        book.author = data["author"]
+        book.genre = data["genre"]
+        book.year = data["year"]
+        book.rating = data["rating"]
+        book.description = data["description"]
 
         db.session.commit()
 
@@ -899,93 +908,79 @@ def admin_edit_book(book_id):
 @app.route("/admin/book/delete/<int:book_id>", methods=["POST"])
 @admin_required
 def admin_delete_book(book_id):
-
-    book = Book.query.get(book_id)
+    book = db.session.get(Book, book_id)
 
     if not book:
         set_alert("Buku tidak ditemukan.", "error")
         return redirect("/admin")
 
     Favorite.query.filter_by(book_id=book.id).delete()
-
     db.session.delete(book)
     db.session.commit()
 
     set_alert("Data buku berhasil dihapus.", "success")
     return redirect("/admin")
 
+
 @app.route("/public-books", methods=["GET"])
 def public_books():
-    keyword = request.args.get("q", "python").strip()
+    keyword = request.args.get("q", "python").strip() or "python"
     books = []
     error = None
+    provider = None
 
     try:
-        url = "https://openlibrary.org/search.json"
-        params = {
-            "q": keyword,
-            "limit": 12,
-            "fields": "title,author_name,first_publish_year,edition_count,cover_i"
-        }
-        headers = {
-            "User-Agent": "BookVault/1.0 (+https://github.com/panjiaryasoma/bookvault-flask)"
-        }
+        books = _fetch_open_library(keyword)
+        provider = "Open Library"
+    except requests.RequestException as exc:
+        app.logger.warning("Open Library request failed: %s", exc)
 
-        response = requests.get(
-            url,
-            params=params,
-            headers=headers,
-            timeout=(5, 25)
-        )
-        response.raise_for_status()
+        try:
+            books = _fetch_google_books(keyword)
+            provider = "Google Books"
+        except requests.RequestException as fallback_exc:
+            app.logger.warning("Google Books fallback failed: %s", fallback_exc)
+            error = (
+                "Open Library dan sumber cadangan sementara tidak dapat diakses. "
+                "Silakan coba lagi beberapa saat."
+            )
+        except (TypeError, ValueError, KeyError) as fallback_parse_exc:
+            app.logger.warning("Google Books response could not be parsed: %s", fallback_parse_exc)
+            error = (
+                "Sumber cadangan merespons, tetapi datanya tidak dapat dibaca. "
+                "Silakan coba lagi."
+            )
+    except (TypeError, ValueError, KeyError) as exc:
+        app.logger.warning("Open Library response could not be parsed: %s", exc)
 
-        data = response.json()
-
-        for item in data.get("docs", []):
-            cover_id = item.get("cover_i")
-            cover_url = ""
-
-            if cover_id:
-                cover_url = f"https://covers.openlibrary.org/b/id/{cover_id}-M.jpg"
-
-            books.append({
-                "title": item.get("title", "Tanpa Judul"),
-                "author": ", ".join(item.get("author_name", ["Tidak diketahui"])),
-                "year": item.get("first_publish_year", "-"),
-                "edition_count": item.get("edition_count", 0),
-                "cover_url": cover_url
-            })
-
-    except requests.Timeout:
-        error = (
-            "Open Library sedang lambat atau tidak merespons. "
-            "Silakan coba pencarian kembali."
-        )
-    except requests.RequestException:
-        error = (
-            "Data dari Open Library sementara tidak dapat diakses. "
-            "Silakan coba lagi beberapa saat."
-        )
-    except Exception:
-        app.logger.exception("Unexpected error while requesting Open Library")
-        error = "Terjadi kesalahan saat membaca respons Open Library. Silakan coba lagi."
+        try:
+            books = _fetch_google_books(keyword)
+            provider = "Google Books"
+        except requests.RequestException as fallback_exc:
+            app.logger.warning("Google Books fallback failed: %s", fallback_exc)
+            error = (
+                "Data API publik sementara tidak dapat diakses. "
+                "Silakan coba lagi beberapa saat."
+            )
 
     return render_template(
         "public_books.html",
         books=books,
         keyword=keyword,
-        error=error
+        error=error,
+        provider=provider
     )
-    
+
+
 @app.route("/admin/import-book", methods=["POST"])
 @admin_required
 def admin_import_book():
-
     title = request.form.get("title", "").strip()
     author = request.form.get("author", "").strip()
     year_raw = request.form.get("year", "").strip()
     cover_url = request.form.get("cover_url", "").strip()
     genre = request.form.get("genre", "").strip()
+    source = request.form.get("source", "API publik").strip() or "API publik"
 
     if not title:
         set_alert("Buku gagal disimpan karena judul tidak valid.", "error")
@@ -1001,13 +996,15 @@ def admin_import_book():
     try:
         year = int(year_raw)
     except ValueError:
-        set_alert("Buku gagal disimpan karena tahun dari Open Library tidak valid.", "error")
+        set_alert("Buku gagal disimpan karena tahun wajib berupa angka.", "error")
         return redirect(request.referrer or "/public-books")
 
     current_year = datetime.now().year
-
     if year < 1000 or year > current_year:
-        set_alert(f"Buku gagal disimpan karena tahun harus berada di antara 1000 sampai {current_year}.", "error")
+        set_alert(
+            f"Buku gagal disimpan karena tahun harus berada di antara 1000 sampai {current_year}.",
+            "error"
+        )
         return redirect(request.referrer or "/public-books")
 
     existing_book = Book.query.filter(
@@ -1025,7 +1022,7 @@ def admin_import_book():
         genre=genre,
         year=year,
         rating=0,
-        description="Data buku ini diimpor dari Open Library API.",
+        description=f"Data buku ini diimpor dari {source}.",
         cover_image=cover_url
     )
 
@@ -1034,6 +1031,7 @@ def admin_import_book():
 
     set_alert("Buku berhasil disimpan ke katalog lokal.", "success")
     return redirect(request.referrer or "/public-books")
+
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
@@ -1051,7 +1049,6 @@ def register():
             return redirect("/register")
 
         existing_user = User.query.filter_by(username=username).first()
-
         if existing_user:
             set_alert("Username sudah digunakan.", "warning")
             return redirect("/register")
@@ -1066,6 +1063,7 @@ def register():
         return redirect("/login")
 
     return render_template("register.html", error=None, success=None)
+
 
 @app.route("/login", methods=["GET", "POST"])
 def user_login():
@@ -1094,6 +1092,7 @@ def user_login():
 
     return render_template("login.html", error=None)
 
+
 @app.route("/user/dashboard", methods=["GET"])
 @login_required
 def user_dashboard():
@@ -1109,7 +1108,6 @@ def user_dashboard():
             .order_by(Favorite.created_at.desc())
             .all()
         )
-
         total_favorites = len(favorites)
 
     total_books = Book.query.count()
@@ -1123,12 +1121,12 @@ def user_dashboard():
         total_books=total_books
     )
 
+
 @app.route("/favorite/add/<int:book_id>", methods=["POST"])
 @login_required
 def add_favorite(book_id):
-
     user = User.query.filter_by(username=session.get("user_username")).first()
-    book = Book.query.get(book_id)
+    book = db.session.get(Book, book_id)
 
     if not user:
         set_alert("Session user tidak valid. Silakan login ulang.", "error")
@@ -1153,10 +1151,10 @@ def add_favorite(book_id):
 
     return redirect(request.referrer or "/")
 
+
 @app.route("/favorite/remove/<int:book_id>", methods=["POST"])
 @login_required
 def remove_favorite(book_id):
-
     user = User.query.filter_by(username=session.get("user_username")).first()
 
     if not user:
@@ -1177,11 +1175,13 @@ def remove_favorite(book_id):
 
     return redirect(request.referrer or "/user/dashboard")
 
+
 @app.route("/logout")
 def user_logout():
     session.clear()
     set_alert("Logout user berhasil.", "success")
     return redirect("/login")
+
 
 @app.context_processor
 def inject_alert():
@@ -1193,6 +1193,7 @@ def inject_alert():
         alert_category=alert_category
     )
 
+
 @app.errorhandler(404)
 def page_not_found(e):
     return render_template("404.html"), 404
@@ -1203,10 +1204,10 @@ def internal_server_error(e):
     db.session.rollback()
     return render_template("500.html"), 500
 
+
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
         seed_data()
 
     app.run(debug=True)
-    
