@@ -79,6 +79,7 @@
             addHiddenInput(form, "title", book.title);
             addHiddenInput(form, "author", book.author);
             addHiddenInput(form, "cover_url", book.coverUrl);
+            addHiddenInput(form, "source", "Google Books");
 
             const yearInput = document.createElement("input");
             yearInput.type = "text";
@@ -109,7 +110,7 @@
     };
 
     const loadFallback = async () => {
-        setStatus("Open Library tidak tersedia. Mengambil hasil dari sumber cadangan...");
+        setStatus("API server belum tersedia. Mengambil hasil dari Google Books di browser...");
 
         const endpoint = new URL("https://www.googleapis.com/books/v1/volumes");
         endpoint.searchParams.set("q", query);
@@ -157,13 +158,13 @@
             }
 
             setStatus(
-                `Open Library tidak merespons. Menampilkan ${books.length} hasil cadangan dari Google Books.`,
+                `Menampilkan ${books.length} hasil cadangan dari Google Books.`,
                 "success"
             );
         } catch (error) {
             console.error("Public book fallback failed:", error);
             setStatus(
-                "Open Library dan sumber cadangan sama-sama tidak dapat diakses. Periksa koneksi internet lalu coba lagi.",
+                "Semua sumber buku publik sedang tidak dapat diakses. Periksa koneksi internet lalu coba lagi.",
                 "error"
             );
         }
