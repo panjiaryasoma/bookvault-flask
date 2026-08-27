@@ -21,11 +21,17 @@
 </form>
 
 {% if error %}
-<div class="error">{{ error }}</div>
+<div class="error">
+    <strong>Open Library belum merespons.</strong>
+    <span>{{ error }}</span>
+</div>
 {% endif %}
 
+{% if keyword and not error %}
 <p>Hasil pencarian untuk: <b>{{ keyword }}</b></p>
+{% endif %}
 
+{% if books %}
 <div class="grid">
     {% for book in books %}
     <div class="card">
@@ -57,4 +63,5 @@
     </div>
     {% endfor %}
 </div>
+{% endif %}
 {% endblock %}
