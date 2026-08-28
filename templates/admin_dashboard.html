@@ -7,6 +7,7 @@
 {% endblock %}
 
 {% block main_class %}admin-page{% endblock %}
+{% block flash_messages %}{% endblock %}
 
 {% block header %}
 <header class="admin-topbar">
@@ -75,8 +76,10 @@
 
         <section class="insights-section" id="insights">
             <div class="section-heading">
-                <p class="section-kicker">Insights</p>
-                <h2>Catalog overview</h2>
+                <div>
+                    <p class="section-kicker">Insights</p>
+                    <h2>Catalog overview</h2>
+                </div>
             </div>
 
             <div class="dashboard-grid">
