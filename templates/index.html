@@ -39,6 +39,7 @@
     aria-labelledby="catalog-title"
     data-user-logged-in="{{ 'true' if session.get('user_logged_in') else 'false' }}"
     data-favorite-ids='{{ favorite_ids|tojson }}'
+    data-server-total="{{ pagination.total if pagination else books|length }}"
 >
     <div class="catalog-heading">
         <div>
@@ -64,6 +65,17 @@
     <p class="session-note">Mode admin · {{ session.get("admin_username") }}</p>
     {% endif %}
 
+    <section class="recently-viewed" id="recently-viewed" hidden aria-labelledby="recently-viewed-title">
+        <div class="recently-viewed__heading">
+            <div>
+                <span class="catalog-eyebrow">History</span>
+                <h2 id="recently-viewed-title">Recently viewed</h2>
+            </div>
+            <button type="button" id="clear-recently-viewed">Clear</button>
+        </div>
+        <div class="recently-viewed__list" id="recently-viewed-list"></div>
+    </section>
+
     <form method="GET" action="/" class="search-box" id="catalog-search-form" aria-label="Cari dan filter katalog buku">
         <label class="catalog-control catalog-control--search">
             <span>Cari</span>
@@ -84,7 +96,7 @@
 
         <label class="catalog-control">
             <span>Urutkan</span>
-            <select id="catalog-sort" aria-label="Urutkan katalog">
+            <select id="catalog-sort" name="sort" aria-label="Urutkan katalog">
                 <option value="default">Urutan katalog</option>
                 <option value="rating_desc">Rating tertinggi</option>
                 <option value="title_asc">Judul A–Z</option>
@@ -92,6 +104,16 @@
                 <option value="newest">Baru ditambahkan</option>
             </select>
         </label>
+
+        {% if session.get("user_logged_in") %}
+        <label class="catalog-control">
+            <span>Koleksi</span>
+            <select id="catalog-scope" name="saved" aria-label="Filter koleksi tersimpan">
+                <option value="">Semua buku</option>
+                <option value="1">Tersimpan saja</option>
+            </select>
+        </label>
+        {% endif %}
 
         <div class="catalog-actions">
             <button type="submit">Terapkan</button>
@@ -118,19 +140,38 @@
     {% endif %}
 
     <div class="catalog-status-row">
-        <p id="catalog-range" class="catalog-range">
-            {% if pagination and pagination.total > 0 %}
-            Menampilkan {{ ((pagination.page - 1) * pagination.per_page) + 1 }}–{{ ((pagination.page - 1) * pagination.per_page) + books|length }} dari {{ pagination.total }} buku
-            {% else %}
-            Tidak ada buku untuk ditampilkan
-            {% endif %}
-        </p>
-        <p class="catalog-sort-status" id="catalog-sort-status">Urutan katalog</p>
+        <div>
+            <p id="catalog-range" class="catalog-range">
+                {% if pagination and pagination.total > 0 %}
+                Menampilkan {{ ((pagination.page - 1) * pagination.per_page) + 1 }}–{{ ((pagination.page - 1) * pagination.per_page) + books|length }} dari {{ pagination.total }} buku
+                {% else %}
+                Tidak ada buku untuk ditampilkan
+                {% endif %}
+            </p>
+            <p class="catalog-sort-status" id="catalog-sort-status">Urutan katalog</p>
+        </div>
+
+        <div class="density-control" aria-label="Kepadatan tampilan katalog">
+            <span>Density</span>
+            <button type="button" data-density="comfortable" class="active">Comfortable</button>
+            <button type="button" data-density="compact">Compact</button>
+        </div>
     </div>
 
     <div class="book-list" id="book-list">
         {% for book in books %}
-        <article class="book-entry">
+        <article
+            class="book-entry"
+            data-book-id="{{ book.id }}"
+            data-title="{{ book.title }}"
+            data-author="{{ book.author }}"
+            data-genre="{{ book.genre }}"
+            data-year="{{ book.year }}"
+            data-rating="{{ book.rating or 0 }}"
+            data-description="{{ book.description or '' }}"
+            data-cover-image="{{ book.cover_image or '' }}"
+            data-created-at="{{ book.created_at.isoformat() if book.created_at else '' }}"
+        >
             <a href="/book/{{ book.id }}" class="book-media" aria-label="Lihat detail {{ book.title }}">
                 {% if book.cover_image %}
                 <img src="{{ book.cover_image }}" alt="Cover {{ book.title }}" class="book-cover" loading="lazy">
@@ -177,7 +218,7 @@
     <div class="catalog-empty" id="catalog-empty" {% if books %}hidden{% endif %}>
         <span class="catalog-eyebrow">No Results</span>
         <h2>Tidak ada buku yang cocok.</h2>
-        <p>Coba ubah istilah pencarian atau genre. Database-nya belum kabur, cuma filternya terlalu semangat.</p>
+        <p>Coba ubah istilah pencarian atau genre.</p>
         <a href="/" class="empty-reset">Reset Filter</a>
     </div>
 
