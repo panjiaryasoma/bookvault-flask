@@ -35,10 +35,25 @@
         type="button"
         class="theme-toggle"
         id="theme-toggle"
-        aria-label="Ganti tema warna"
+        aria-label="Aktifkan dark mode"
         aria-pressed="false"
+        title="Ganti tema"
     >
-        Dark mode
+        <span class="theme-toggle__track" aria-hidden="true">
+            <span class="theme-toggle__icon theme-toggle__icon--sun">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                    <circle cx="12" cy="12" r="3.5"></circle>
+                    <path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"></path>
+                </svg>
+            </span>
+            <span class="theme-toggle__icon theme-toggle__icon--moon">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                    <path d="M20 15.2A8.2 8.2 0 0 1 8.8 4a8.2 8.2 0 1 0 11.2 11.2Z"></path>
+                </svg>
+            </span>
+            <span class="theme-toggle__knob"></span>
+        </span>
+        <span class="sr-only" id="theme-toggle-label">Dark mode</span>
     </button>
 
     <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
