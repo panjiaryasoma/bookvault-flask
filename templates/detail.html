@@ -13,7 +13,19 @@
 {% endblock %}
 
 {% block content %}
-<div class="detail-card">
+<div
+    class="detail-card"
+    id="book-detail"
+    data-book-id="{{ book.id }}"
+    data-title="{{ book.title }}"
+    data-author="{{ book.author }}"
+    data-genre="{{ book.genre }}"
+    data-year="{{ book.year }}"
+    data-rating="{{ book.rating or 0 }}"
+    data-description="{{ book.description or '' }}"
+    data-cover-image="{{ book.cover_image or '' }}"
+    data-created-at="{{ book.created_at.isoformat() if book.created_at else '' }}"
+>
     {% if book.cover_image %}
     <img src="{{ book.cover_image }}" alt="Cover {{ book.title }}" class="detail-cover">
     {% else %}
@@ -36,4 +48,8 @@
         <a href="/">Kembali ke Katalog</a>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/detail.js') }}"></script>
 {% endblock %}
