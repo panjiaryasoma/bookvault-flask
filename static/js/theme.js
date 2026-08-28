@@ -2,6 +2,7 @@
     const STORAGE_KEY = "bookvault-theme";
     const root = document.documentElement;
     const toggle = document.getElementById("theme-toggle");
+    const label = document.getElementById("theme-toggle-label");
 
     if (!toggle) {
         return;
@@ -11,12 +12,15 @@
 
     const syncToggle = () => {
         const isDark = getTheme() === "dark";
-        toggle.textContent = isDark ? "Light mode" : "Dark mode";
+        const nextThemeLabel = isDark ? "Aktifkan light mode" : "Aktifkan dark mode";
+
         toggle.setAttribute("aria-pressed", String(isDark));
-        toggle.setAttribute(
-            "aria-label",
-            isDark ? "Aktifkan light mode" : "Aktifkan dark mode"
-        );
+        toggle.setAttribute("aria-label", nextThemeLabel);
+        toggle.title = nextThemeLabel;
+
+        if (label) {
+            label.textContent = isDark ? "Light mode" : "Dark mode";
+        }
     };
 
     const setTheme = (theme, persist = true) => {
