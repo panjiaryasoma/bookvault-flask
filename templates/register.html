@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Register - BookVault{% endblock %}
+{% block title %}Create Account - BookVault{% endblock %}
 
 {% block styles %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/register.css') }}">
@@ -10,35 +10,69 @@
 {% block flash_messages %}{% endblock %}
 
 {% block content %}
-<div class="register-box">
-    <h1>Register</h1>
+<section class="register-shell" aria-labelledby="register-title">
+    <div class="register-intro">
+        <a href="/" class="register-brand">BookVault</a>
+        <span class="register-eyebrow">Account Setup</span>
+        <h1 id="register-title">Bangun personal library-mu.</h1>
+        <p class="register-lead">Akun baru dibuat sebagai user dan langsung siap dipakai untuk menyimpan favorit, mengelola koleksi pribadi, dan menjelajahi katalog BookVault.</p>
 
-    {% include "flash_messages.html" %}
-
-    {% if error %}
-    <p class="error">{{ error }}</p>
-    {% endif %}
-
-    {% if success %}
-    <p class="success">{{ success }}</p>
-    {% endif %}
-
-    <form method="POST" action="/register">
-        <label>Username</label>
-        <input type="text" name="username" required>
-
-        <label>Password</label>
-        <input type="password" name="password" required>
-
-        <label>Konfirmasi Password</label>
-        <input type="password" name="confirm_password" required>
-
-        <button type="submit">Register</button>
-    </form>
-
-    <div class="hint">
-        <a href="/">← Kembali ke Katalog</a> |
-        <a href="/admin/login">Login Admin</a>
+        <div class="register-notes">
+            <div>
+                <span>01</span>
+                <p>Buat username yang belum digunakan.</p>
+            </div>
+            <div>
+                <span>02</span>
+                <p>Masukkan password dua kali untuk memastikan tidak ada salah ketik.</p>
+            </div>
+            <div>
+                <span>03</span>
+                <p>Setelah registrasi berhasil, masuk lewat halaman login yang sama untuk semua role.</p>
+            </div>
+        </div>
     </div>
-</div>
+
+    <div class="register-panel">
+        <div class="register-panel__heading">
+            <span class="register-eyebrow">New Account</span>
+            <h2>Create account</h2>
+            <p>Registrasi publik hanya membuat akun dengan role user.</p>
+        </div>
+
+        {% include "flash_messages.html" %}
+
+        {% if error %}
+        <p class="error">{{ error }}</p>
+        {% endif %}
+
+        {% if success %}
+        <p class="success">{{ success }}</p>
+        {% endif %}
+
+        <form method="POST" action="/register" class="register-form">
+            <label>
+                <span>Username</span>
+                <input type="text" name="username" autocomplete="username" autofocus required>
+            </label>
+
+            <label>
+                <span>Password</span>
+                <input type="password" name="password" autocomplete="new-password" required>
+            </label>
+
+            <label>
+                <span>Konfirmasi Password</span>
+                <input type="password" name="confirm_password" autocomplete="new-password" required>
+            </label>
+
+            <button type="submit">Create account</button>
+        </form>
+
+        <div class="register-links">
+            <p>Sudah punya akun? <a href="/login">Sign in</a></p>
+            <a href="/" class="back-link">← Kembali ke katalog</a>
+        </div>
+    </div>
+</section>
 {% endblock %}
