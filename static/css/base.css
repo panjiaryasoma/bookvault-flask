@@ -15,6 +15,21 @@
     --shell: 1120px;
 }
 
+html[data-theme="dark"] {
+    --bg: #0a0a0a;
+    --surface: #121212;
+    --surface-soft: #1f1f1f;
+    --paper: #fafafa;
+    --muted: #a3a3a3;
+    --faint: #737373;
+    --line: #fafafa;
+    --line-soft: #3f3f46;
+    --brass: #ef4444;
+    --brass-soft: #dc2626;
+    --green: #22c55e;
+    --red: #ef4444;
+}
+
 * {
     box-sizing: border-box;
 }
@@ -22,6 +37,11 @@
 html {
     min-height: 100%;
     color-scheme: light;
+    background: var(--bg);
+}
+
+html[data-theme="dark"] {
+    color-scheme: dark;
 }
 
 body {
@@ -77,6 +97,36 @@ button {
     transform: translateY(0);
 }
 
+.theme-toggle {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 1200;
+    min-width: 92px;
+    min-height: 42px;
+    padding: 9px 12px;
+    border: 2px solid var(--line);
+    border-radius: 0;
+    background: var(--surface);
+    color: var(--paper);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.theme-toggle:hover,
+.theme-toggle:focus-visible {
+    border-color: var(--brass);
+    background: var(--brass);
+    color: #fafafa;
+}
+
+.theme-toggle:focus-visible {
+    outline: 2px solid var(--surface);
+    outline-offset: 2px;
+}
+
 .flash-container {
     margin-bottom: 18px;
 }
@@ -102,6 +152,11 @@ button {
     color: #8a6800;
 }
 
+html[data-theme="dark"] .flash.warning,
+html[data-theme="dark"] .alert.warning {
+    color: #facc15;
+}
+
 .flash.info {
     color: var(--muted);
 }
@@ -115,6 +170,12 @@ button {
 @media (max-width: 768px) {
     .container {
         width: min(100% - 28px, var(--shell));
-        padding: 22px 0 38px;
+        padding: 22px 0 76px;
+    }
+
+    .theme-toggle {
+        right: 12px;
+        bottom: 12px;
+        min-width: 84px;
     }
 }
