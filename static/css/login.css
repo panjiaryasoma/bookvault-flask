@@ -60,46 +60,6 @@
     line-height: 1.7;
 }
 
-.role-guide {
-    margin-top: 42px;
-    border-top: 2px solid var(--line);
-    border-bottom: 1px solid var(--line-soft);
-}
-
-.role-guide > div {
-    display: grid;
-    grid-template-columns: 74px 150px minmax(0, 1fr);
-    gap: 16px;
-    align-items: baseline;
-    padding: 14px 0;
-    border-bottom: 1px solid var(--line-soft);
-}
-
-.role-guide > div:last-child {
-    border-bottom: 0;
-}
-
-.role-guide span,
-.role-guide small {
-    color: var(--muted);
-    font-size: 11px;
-}
-
-.role-guide span {
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-}
-
-.role-guide strong {
-    color: var(--paper);
-    font-size: 13px;
-}
-
-.role-guide small {
-    line-height: 1.45;
-}
-
 .auth-panel {
     padding-top: 2px;
     border-top: 4px solid var(--line);
@@ -225,16 +185,5 @@
 
     .auth-intro h1 {
         font-size: clamp(40px, 11vw, 58px);
-    }
-}
-
-@media (max-width: 520px) {
-    .role-guide > div {
-        grid-template-columns: 64px 1fr;
-        gap: 8px 14px;
-    }
-
-    .role-guide small {
-        grid-column: 2;
     }
 }
