@@ -6,143 +6,216 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/admin_dashboard.css') }}">
 {% endblock %}
 
+{% block main_class %}admin-page{% endblock %}
+
 {% block header %}
-<header>
-    <div>
-        <h1>Admin Dashboard</h1>
-        <p>Login sebagai: {{ username }}</p>
-    </div>
-    <div>
-        <a href="/">Katalog</a> |
-        <a href="/api/docs">API Docs</a> |
-        <a href="/admin/logout">Logout</a>
-    </div>
+<header class="admin-topbar">
+    <a href="/admin" class="admin-brand">BookVault <span>Admin</span></a>
+
+    <nav class="admin-topnav" aria-label="Navigasi admin">
+        <a href="/">Katalog</a>
+        <a href="/public-books">Public Books</a>
+        <a href="/api/docs">API Docs</a>
+        <a href="/admin/logout" class="logout-link">Logout</a>
+    </nav>
 </header>
 {% endblock %}
 
 {% block content %}
-<section class="stats-grid">
-    <div class="stat-card">
-        <h3>Total Buku</h3>
-        <div class="number">{{ total_books }}</div>
-    </div>
-
-    <div class="stat-card">
-        <h3>Total Genre</h3>
-        <div class="number">{{ total_genres }}</div>
-    </div>
-
-    <div class="stat-card">
-        <h3>Rata-rata Rating</h3>
-        <div class="number">{{ avg_rating }}</div>
-    </div>
-
-    <div class="stat-card">
-        <h3>Total User</h3>
-        <div class="number">{{ total_users }}</div>
-    </div>
-</section>
-
-<section class="dashboard-grid">
-    <div class="panel">
-        <h2>Distribusi Genre</h2>
-
-        {% if genre_stats %}
-        {% for item in genre_stats %}
-        <div class="bar-row">
-            <div class="bar-info">
-                <span>{{ item.genre }}</span>
-                <span>{{ item.total }} buku</span>
-            </div>
-            <div class="bar-track">
-                <div class="bar-fill" style="width: {{ item.percent }}%;"></div>
-            </div>
+<div class="admin-shell">
+    <aside class="admin-sidebar">
+        <div class="sidebar-account">
+            <span class="sidebar-label">Administrator</span>
+            <strong>{{ username }}</strong>
         </div>
-        {% endfor %}
-        {% else %}
-        <p>Belum ada data genre.</p>
-        {% endif %}
-    </div>
 
-    <div class="panel">
-        <h2>Top Rated Books</h2>
+        <nav class="sidebar-nav" aria-label="Bagian dashboard">
+            <a href="#overview" class="active">Overview</a>
+            <a href="#insights">Insights</a>
+            <a href="#catalog-management">Catalog</a>
+        </nav>
 
-        {% if top_books %}
-        {% for book in top_books %}
-        <div class="top-book">
-            <strong>{{ book.title }}</strong>
-            <span>
-                {{ book.author }} • {{ book.genre }} •
-                {% if book.rating and book.rating > 0 %}
-                Rating {{ book.rating }}
-                {% else %}
-                Rating Belum dinilai
-                {% endif %}
-            </span>
+        <div class="sidebar-actions">
+            <span class="sidebar-label">Quick actions</span>
+            <a href="/admin/book/add">Tambah buku</a>
+            <a href="/public-books">Import dari API</a>
         </div>
-        {% endfor %}
-        {% else %}
-        <p>Belum ada data buku.</p>
-        {% endif %}
+    </aside>
+
+    <div class="admin-content">
+        {% include "flash_messages.html" %}
+
+        <section class="dashboard-intro" id="overview">
+            <div>
+                <p class="section-kicker">Overview</p>
+                <h1>Admin Dashboard</h1>
+                <p class="intro-copy">Ringkasan katalog, distribusi data, dan pengelolaan buku BookVault.</p>
+            </div>
+            <a href="/admin/book/add" class="primary-action">+ Tambah Buku</a>
+        </section>
+
+        <section class="stats-grid" aria-label="Statistik katalog">
+            <article class="stat-card">
+                <span>Total Buku</span>
+                <strong>{{ total_books }}</strong>
+            </article>
+            <article class="stat-card">
+                <span>Total Genre</span>
+                <strong>{{ total_genres }}</strong>
+            </article>
+            <article class="stat-card">
+                <span>Rata-rata Rating</span>
+                <strong>{{ avg_rating }}</strong>
+            </article>
+            <article class="stat-card">
+                <span>Total User</span>
+                <strong>{{ total_users }}</strong>
+            </article>
+        </section>
+
+        <section class="insights-section" id="insights">
+            <div class="section-heading">
+                <p class="section-kicker">Insights</p>
+                <h2>Catalog overview</h2>
+            </div>
+
+            <div class="dashboard-grid">
+                <article class="panel genre-panel">
+                    <div class="panel-heading">
+                        <h3>Distribusi Genre</h3>
+                        <span>{{ total_genres }} kategori</span>
+                    </div>
+
+                    {% if genre_stats %}
+                    <div class="genre-list">
+                        {% for item in genre_stats %}
+                        <div class="bar-row">
+                            <div class="bar-info">
+                                <span>{{ item.genre }}</span>
+                                <span>{{ item.total }} buku</span>
+                            </div>
+                            <div class="bar-track" aria-hidden="true">
+                                <div class="bar-fill" style="width: {{ item.percent }}%;"></div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="empty-copy">Belum ada data genre.</p>
+                    {% endif %}
+                </article>
+
+                <article class="panel top-books-panel">
+                    <div class="panel-heading">
+                        <h3>Top Rated Books</h3>
+                        <span>5 tertinggi</span>
+                    </div>
+
+                    {% if top_books %}
+                    <ol class="top-books-list">
+                        {% for book in top_books %}
+                        <li class="top-book">
+                            <span class="top-book-rank">{{ loop.index }}</span>
+                            <div>
+                                <strong>{{ book.title }}</strong>
+                                <span>{{ book.author }} · {{ book.genre }}</span>
+                            </div>
+                            <span class="rating-value">
+                                {% if book.rating and book.rating > 0 %}
+                                {{ book.rating }}
+                                {% else %}
+                                —
+                                {% endif %}
+                            </span>
+                        </li>
+                        {% endfor %}
+                    </ol>
+                    {% else %}
+                    <p class="empty-copy">Belum ada data buku.</p>
+                    {% endif %}
+                </article>
+            </div>
+        </section>
+
+        <section class="catalog-section" id="catalog-management">
+            <div class="catalog-heading">
+                <div>
+                    <p class="section-kicker">Catalog</p>
+                    <h2>Kelola buku</h2>
+                </div>
+                <span class="catalog-count">{{ books|length }} data tampil</span>
+            </div>
+
+            <form method="GET" action="/admin" class="admin-filter">
+                <label class="filter-field filter-search">
+                    <span>Cari buku</span>
+                    <input type="text" name="q" placeholder="Judul atau penulis" value="{{ q }}">
+                </label>
+
+                <label class="filter-field">
+                    <span>Genre</span>
+                    <select name="genre">
+                        <option value="">Semua Genre</option>
+                        {% for genre in genres %}
+                        <option value="{{ genre }}" {% if selected_genre == genre %}selected{% endif %}>
+                            {{ genre }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </label>
+
+                <div class="filter-actions">
+                    <button type="submit">Filter</button>
+                    <a href="/admin" class="reset-link">Reset</a>
+                </div>
+            </form>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Judul</th>
+                            <th>Penulis</th>
+                            <th>Genre</th>
+                            <th>Tahun</th>
+                            <th>Rating</th>
+                            <th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for book in books %}
+                        <tr>
+                            <td class="id-cell">{{ book.id }}</td>
+                            <td class="title-cell">{{ book.title }}</td>
+                            <td>{{ book.author }}</td>
+                            <td>{{ book.genre }}</td>
+                            <td>{{ book.year }}</td>
+                            <td>
+                                {% if book.rating and book.rating > 0 %}
+                                {{ book.rating }}
+                                {% else %}
+                                —
+                                {% endif %}
+                            </td>
+                            <td class="action">
+                                <a href="/admin/book/edit/{{ book.id }}">Edit</a>
+                                <form method="POST" action="/admin/book/delete/{{ book.id }}" class="delete-form">
+                                    <button type="submit">Hapus</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="empty-row">Tidak ada buku yang cocok dengan filter.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
     </div>
-</section>
-
-<a href="/admin/book/add" class="btn">+ Tambah Buku</a>
-
-<form method="GET" action="/admin" class="admin-filter">
-    <input type="text" name="q" placeholder="Cari judul atau penulis..." value="{{ q }}">
-
-    <select name="genre">
-        <option value="">Semua Genre</option>
-        {% for genre in genres %}
-        <option value="{{ genre }}" {% if selected_genre == genre %}selected{% endif %}>
-            {{ genre }}
-        </option>
-        {% endfor %}
-    </select>
-
-    <button type="submit">Filter</button>
-    <a href="/admin" class="reset-link">Reset</a>
-</form>
-
-<table>
-    <thead>
-        <tr>
-            <th>ID</th>
-            <th>Judul</th>
-            <th>Penulis</th>
-            <th>Genre</th>
-            <th>Tahun</th>
-            <th>Rating</th>
-            <th>Aksi</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for book in books %}
-        <tr>
-            <td>{{ book.id }}</td>
-            <td>{{ book.title }}</td>
-            <td>{{ book.author }}</td>
-            <td>{{ book.genre }}</td>
-            <td>{{ book.year }}</td>
-            <td>
-                {% if book.rating and book.rating > 0 %}
-                {{ book.rating }}
-                {% else %}
-                Belum dinilai
-                {% endif %}
-            </td>
-            <td class="action">
-                <a href="/admin/book/edit/{{ book.id }}">Edit</a>
-
-                <form method="POST" action="/admin/book/delete/{{ book.id }}" class="delete-form">
-                    <button type="submit">Hapus</button>
-                </form>
-            </td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+</div>
 {% endblock %}
 
 {% block scripts %}
