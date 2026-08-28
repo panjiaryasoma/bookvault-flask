@@ -32,6 +32,7 @@
 
         <nav class="sidebar-nav" aria-label="Bagian dashboard">
             <a href="#overview" class="active">Overview</a>
+            <a href="#catalog-health">Health</a>
             <a href="#insights">Insights</a>
             <a href="#catalog-management">Catalog</a>
         </nav>
@@ -40,41 +41,126 @@
             <span class="sidebar-label">Quick actions</span>
             <a href="/admin/book/add">Tambah buku</a>
             <a href="/public-books">Import dari API</a>
+            <a href="/api/docs">API documentation</a>
         </div>
     </aside>
 
-    <div class="admin-content">
+    <main class="admin-content">
         {% include "flash_messages.html" %}
 
-        <section class="dashboard-intro" id="overview">
+        <section class="dashboard-intro dashboard-section" id="overview" data-section="overview">
             <div>
-                <p class="section-kicker">Overview</p>
-                <h1>Admin Dashboard</h1>
-                <p class="intro-copy">Ringkasan katalog, distribusi data, dan pengelolaan buku BookVault.</p>
+                <p class="section-kicker">Operations</p>
+                <h1>Admin workspace</h1>
+                <p class="intro-copy">Pantau kesehatan katalog, temukan data yang perlu dibenahi, lalu kelola koleksi BookVault dari satu tempat.</p>
             </div>
-            <a href="/admin/book/add" class="primary-action">+ Tambah Buku</a>
+            <div class="intro-actions">
+                <a href="/public-books" class="secondary-action">Import API</a>
+                <a href="/admin/book/add" class="primary-action">+ Tambah Buku</a>
+            </div>
         </section>
 
         <section class="stats-grid" aria-label="Statistik katalog">
             <article class="stat-card">
                 <span>Total Buku</span>
                 <strong>{{ total_books }}</strong>
+                <small>katalog lokal</small>
             </article>
             <article class="stat-card">
                 <span>Total Genre</span>
                 <strong>{{ total_genres }}</strong>
+                <small>kategori aktif</small>
             </article>
             <article class="stat-card">
                 <span>Rata-rata Rating</span>
                 <strong>{{ avg_rating }}</strong>
+                <small>dari buku terukur</small>
             </article>
             <article class="stat-card">
                 <span>Total User</span>
                 <strong>{{ total_users }}</strong>
+                <small>akun tersimpan</small>
             </article>
         </section>
 
-        <section class="insights-section" id="insights">
+        <section class="health-section dashboard-section" id="catalog-health" data-section="catalog-health">
+            <div class="section-heading">
+                <div>
+                    <p class="section-kicker">Catalog Health</p>
+                    <h2>Kualitas metadata</h2>
+                </div>
+                <span class="scope-note" id="health-scope">berdasarkan data yang dimuat</span>
+            </div>
+
+            <div class="health-layout">
+                <article class="health-panel">
+                    <div class="health-row">
+                        <div class="health-copy">
+                            <span>Sudah dirating</span>
+                            <strong id="health-rated-value">—</strong>
+                        </div>
+                        <div class="health-track" aria-hidden="true"><span id="health-rated-bar"></span></div>
+                    </div>
+
+                    <div class="health-row">
+                        <div class="health-copy">
+                            <span>Memiliki cover</span>
+                            <strong id="health-cover-value">—</strong>
+                        </div>
+                        <div class="health-track" aria-hidden="true"><span id="health-cover-bar"></span></div>
+                    </div>
+
+                    <div class="health-row">
+                        <div class="health-copy">
+                            <span>Memiliki deskripsi</span>
+                            <strong id="health-description-value">—</strong>
+                        </div>
+                        <div class="health-track" aria-hidden="true"><span id="health-description-bar"></span></div>
+                    </div>
+                </article>
+
+                <article class="attention-panel">
+                    <div class="panel-heading">
+                        <div>
+                            <p class="section-kicker">Needs Attention</p>
+                            <h3>Yang perlu dibenahi</h3>
+                        </div>
+                        <button type="button" class="clear-attention" id="clear-attention" hidden>Clear</button>
+                    </div>
+
+                    <div class="attention-list">
+                        <button type="button" class="attention-item" data-attention="cover">
+                            <span>Missing cover</span>
+                            <strong id="missing-cover-count">0</strong>
+                        </button>
+                        <button type="button" class="attention-item" data-attention="rating">
+                            <span>Belum dirating</span>
+                            <strong id="missing-rating-count">0</strong>
+                        </button>
+                        <button type="button" class="attention-item" data-attention="description">
+                            <span>Missing description</span>
+                            <strong id="missing-description-count">0</strong>
+                        </button>
+                    </div>
+                    <p class="attention-note">Klik kategori untuk menampilkan item terkait langsung di tabel katalog.</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="activity-section dashboard-section" id="activity" data-section="activity">
+            <div class="section-heading">
+                <div>
+                    <p class="section-kicker">Activity</p>
+                    <h2>Recently added</h2>
+                </div>
+                <span class="scope-note">entri terbaru pada data yang dimuat</span>
+            </div>
+            <div class="recent-admin-list" id="recent-admin-list">
+                <p class="empty-copy">Memuat entri terbaru…</p>
+            </div>
+        </section>
+
+        <section class="insights-section dashboard-section" id="insights" data-section="insights">
             <div class="section-heading">
                 <div>
                     <p class="section-kicker">Insights</p>
@@ -118,7 +204,7 @@
                     <ol class="top-books-list">
                         {% for book in top_books %}
                         <li class="top-book">
-                            <span class="top-book-rank">{{ loop.index }}</span>
+                            <span class="top-book-rank">0{{ loop.index }}</span>
                             <div>
                                 <strong>{{ book.title }}</strong>
                                 <span>{{ book.author }} · {{ book.genre }}</span>
@@ -140,19 +226,19 @@
             </div>
         </section>
 
-        <section class="catalog-section" id="catalog-management">
+        <section class="catalog-section dashboard-section" id="catalog-management" data-section="catalog-management">
             <div class="catalog-heading">
                 <div>
                     <p class="section-kicker">Catalog</p>
                     <h2>Kelola buku</h2>
                 </div>
-                <span class="catalog-count">{{ books|length }} data tampil</span>
+                <span class="catalog-count" id="catalog-count">{{ books|length }} data tampil</span>
             </div>
 
             <form method="GET" action="/admin" class="admin-filter">
                 <label class="filter-field filter-search">
                     <span>Cari buku</span>
-                    <input type="text" name="q" placeholder="Judul atau penulis" value="{{ q }}">
+                    <input type="search" name="q" placeholder="Judul atau penulis" value="{{ q }}" autocomplete="off">
                 </label>
 
                 <label class="filter-field">
@@ -164,6 +250,17 @@
                             {{ genre }}
                         </option>
                         {% endfor %}
+                    </select>
+                </label>
+
+                <label class="filter-field">
+                    <span>Urutkan</span>
+                    <select id="admin-sort">
+                        <option value="id">ID terlama</option>
+                        <option value="newest">Baru ditambahkan</option>
+                        <option value="title">Judul A–Z</option>
+                        <option value="year">Tahun terbaru</option>
+                        <option value="rating">Rating tertinggi</option>
                     </select>
                 </label>
 
@@ -186,9 +283,20 @@
                             <th>Aksi</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="admin-book-rows">
                         {% for book in books %}
-                        <tr>
+                        <tr
+                            class="admin-book-row"
+                            data-id="{{ book.id }}"
+                            data-title="{{ book.title }}"
+                            data-author="{{ book.author }}"
+                            data-genre="{{ book.genre }}"
+                            data-year="{{ book.year }}"
+                            data-rating="{{ book.rating or 0 }}"
+                            data-has-cover="{{ 'true' if book.cover_image else 'false' }}"
+                            data-has-description="{{ 'true' if book.description else 'false' }}"
+                            data-created-at="{{ book.created_at.isoformat() if book.created_at else '' }}"
+                        >
                             <td class="id-cell">{{ book.id }}</td>
                             <td class="title-cell">{{ book.title }}</td>
                             <td>{{ book.author }}</td>
@@ -209,15 +317,20 @@
                             </td>
                         </tr>
                         {% else %}
-                        <tr>
+                        <tr class="server-empty-row">
                             <td colspan="7" class="empty-row">Tidak ada buku yang cocok dengan filter.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
+
+            <div class="table-footer">
+                <p id="table-range">—</p>
+                <nav class="admin-pagination" id="admin-pagination" aria-label="Navigasi halaman tabel"></nav>
+            </div>
         </section>
-    </div>
+    </main>
 </div>
 {% endblock %}
 
