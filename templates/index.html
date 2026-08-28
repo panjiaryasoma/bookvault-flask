@@ -12,21 +12,21 @@
         <a href="/" class="brand-mark">BookVault</a>
 
         <nav class="top-nav" aria-label="Navigasi BookVault">
-            <a href="/public-books">Open Library</a>
+            <a href="/public-books">Public Books</a>
 
             {% if session.get("user_logged_in") %}
-            <a href="/user/dashboard">Dashboard User</a>
+            <a href="/user/dashboard">My Library</a>
             <a href="/logout">Logout</a>
 
             {% elif session.get("admin_logged_in") %}
             <a href="/api/docs">API Docs</a>
-            <a href="/admin">Dashboard Admin</a>
-            <a href="/admin/logout">Logout Admin</a>
+            <a href="/admin">Admin</a>
+            <a href="/admin/logout">Logout</a>
 
             {% else %}
             <a href="/register">Register</a>
-            <a href="/login">Login User</a>
-            <a href="/admin/login">Login Admin</a>
+            <a href="/login">Login</a>
+            <a href="/admin/login">Admin</a>
             {% endif %}
         </nav>
     </div>
@@ -34,60 +34,124 @@
 {% endblock %}
 
 {% block content %}
-<section class="catalog" aria-labelledby="catalog-title">
+<section
+    class="catalog"
+    id="catalog-app"
+    aria-labelledby="catalog-title"
+    data-user-logged-in="{{ 'true' if session.get('user_logged_in') else 'false' }}"
+    data-favorite-ids='{{ favorite_ids|tojson }}'
+>
     <div class="catalog-heading">
         <div>
-            <h1 id="catalog-title">Katalog Buku</h1>
-            <p>Koleksi buku lokal BookVault.</p>
+            <span class="catalog-eyebrow">Catalog</span>
+            <h1 id="catalog-title">Jelajahi Koleksi</h1>
+            <p>Cari, urutkan, dan simpan buku dari katalog lokal BookVault.</p>
         </div>
 
-        {% if pagination %}
-        <p class="result-count">{{ pagination.total }} buku</p>
-        {% else %}
-        <p class="result-count">{{ books|length }} buku</p>
-        {% endif %}
+        <div class="catalog-summary" aria-live="polite">
+            {% if pagination %}
+            <strong id="catalog-result-count">{{ pagination.total }}</strong>
+            <span id="catalog-result-label">buku ditemukan</span>
+            {% else %}
+            <strong id="catalog-result-count">{{ books|length }}</strong>
+            <span id="catalog-result-label">buku ditemukan</span>
+            {% endif %}
+        </div>
     </div>
 
     {% if session.get("user_logged_in") %}
-    <p class="session-note">Masuk sebagai {{ session.get("user_username") }}</p>
+    <p class="session-note">Koleksi untuk <strong>{{ session.get("user_username") }}</strong></p>
     {% elif session.get("admin_logged_in") %}
-    <p class="session-note">Masuk sebagai admin {{ session.get("admin_username") }}</p>
+    <p class="session-note">Mode admin · {{ session.get("admin_username") }}</p>
     {% endif %}
 
-    <form method="GET" action="/" class="search-box" aria-label="Cari dan filter katalog buku">
-        <input type="text" name="q" placeholder="Cari judul atau penulis" value="{{ q }}" aria-label="Cari buku">
+    <form method="GET" action="/" class="search-box" id="catalog-search-form" aria-label="Cari dan filter katalog buku">
+        <label class="catalog-control catalog-control--search">
+            <span>Cari</span>
+            <input type="search" name="q" placeholder="Judul atau penulis" value="{{ q }}" aria-label="Cari buku" autocomplete="off">
+        </label>
 
-        <select name="genre" class="genre-select" aria-label="Filter genre">
-            <option value="">Semua Genre</option>
-            {% for g in genres %}
-            <option value="{{ g }}" {% if selected_genre == g %}selected{% endif %}>
-                {{ g }}
-            </option>
-            {% endfor %}
-        </select>
+        <label class="catalog-control">
+            <span>Genre</span>
+            <select name="genre" class="genre-select" aria-label="Filter genre">
+                <option value="">Semua Genre</option>
+                {% for g in genres %}
+                <option value="{{ g }}" {% if selected_genre == g %}selected{% endif %}>
+                    {{ g }}
+                </option>
+                {% endfor %}
+            </select>
+        </label>
 
-        <button type="submit">Cari</button>
+        <label class="catalog-control">
+            <span>Urutkan</span>
+            <select id="catalog-sort" aria-label="Urutkan katalog">
+                <option value="default">Urutan katalog</option>
+                <option value="rating_desc">Rating tertinggi</option>
+                <option value="title_asc">Judul A–Z</option>
+                <option value="year_desc">Tahun terbaru</option>
+                <option value="newest">Baru ditambahkan</option>
+            </select>
+        </label>
+
+        <div class="catalog-actions">
+            <button type="submit">Terapkan</button>
+            <a href="/" class="reset-link">Reset</a>
+        </div>
     </form>
 
-    <div class="book-list">
+    {% if q or selected_genre %}
+    <div class="active-filters" aria-label="Filter aktif">
+        <span class="active-filters__label">Filter aktif</span>
+
+        {% if q %}
+        <a href="{{ url_for('index', genre=selected_genre) }}" class="filter-token">
+            Pencarian: {{ q }} <span aria-hidden="true">×</span>
+        </a>
+        {% endif %}
+
+        {% if selected_genre %}
+        <a href="{{ url_for('index', q=q) }}" class="filter-token">
+            {{ selected_genre }} <span aria-hidden="true">×</span>
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="catalog-status-row">
+        <p id="catalog-range" class="catalog-range">
+            {% if pagination and pagination.total > 0 %}
+            Menampilkan {{ ((pagination.page - 1) * pagination.per_page) + 1 }}–{{ ((pagination.page - 1) * pagination.per_page) + books|length }} dari {{ pagination.total }} buku
+            {% else %}
+            Tidak ada buku untuk ditampilkan
+            {% endif %}
+        </p>
+        <p class="catalog-sort-status" id="catalog-sort-status">Urutan katalog</p>
+    </div>
+
+    <div class="book-list" id="book-list">
         {% for book in books %}
         <article class="book-entry">
             <a href="/book/{{ book.id }}" class="book-media" aria-label="Lihat detail {{ book.title }}">
                 {% if book.cover_image %}
-                <img src="{{ book.cover_image }}" alt="Cover {{ book.title }}" class="book-cover">
+                <img src="{{ book.cover_image }}" alt="Cover {{ book.title }}" class="book-cover" loading="lazy">
                 {% else %}
                 <div class="book-cover cover-placeholder">No Cover</div>
                 {% endif %}
             </a>
 
             <div class="book-info">
-                <h2><a href="/book/{{ book.id }}">{{ book.title }}</a></h2>
-                <p class="meta">{{ book.author }} · {{ book.year }} · {{ book.genre }}</p>
-                <p class="description">{{ book.description }}</p>
+                <div class="book-title-row">
+                    <h2><a href="/book/{{ book.id }}">{{ book.title }}</a></h2>
+                    <span class="book-year">{{ book.year }}</span>
+                </div>
+
+                <p class="meta">{{ book.author }} · {{ book.genre }}</p>
+                <p class="description">{{ book.description or 'Tidak ada deskripsi.' }}</p>
 
                 <div class="book-footer">
                     {% if book.rating and book.rating > 0 %}
-                    <span class="rating">Rating {{ book.rating }}</span>
+                    <span class="rating">★ {{ book.rating }}</span>
                     {% else %}
                     <span class="rating rating--muted">Belum dinilai</span>
                     {% endif %}
@@ -97,11 +161,11 @@
                     {% if session.get("user_logged_in") %}
                         {% if book.id in favorite_ids %}
                         <form method="POST" action="/favorite/remove/{{ book.id }}" class="favorite-form">
-                            <button type="submit" class="text-button">Hapus favorit</button>
+                            <button type="submit" class="text-button text-button--saved" aria-label="Hapus {{ book.title }} dari favorit">♥ Tersimpan</button>
                         </form>
                         {% else %}
                         <form method="POST" action="/favorite/add/{{ book.id }}" class="favorite-form">
-                            <button type="submit" class="text-button">Favorit</button>
+                            <button type="submit" class="text-button" aria-label="Simpan {{ book.title }} ke favorit">♡ Simpan</button>
                         </form>
                         {% endif %}
                     {% endif %}
@@ -111,22 +175,43 @@
         {% endfor %}
     </div>
 
+    <div class="catalog-empty" id="catalog-empty" {% if books %}hidden{% endif %}>
+        <span class="catalog-eyebrow">No Results</span>
+        <h2>Tidak ada buku yang cocok.</h2>
+        <p>Coba ubah istilah pencarian atau genre. Database-nya belum kabur, cuma filternya terlalu semangat.</p>
+        <a href="/" class="empty-reset">Reset Filter</a>
+    </div>
+
     {% if pagination and pagination.pages > 1 %}
-    <nav class="pagination" aria-label="Navigasi halaman katalog">
+    <nav class="pagination" id="catalog-pagination" aria-label="Navigasi halaman katalog">
         {% if pagination.has_prev %}
-        <a href="{{ url_for('index', page=pagination.prev_num, q=q, genre=selected_genre) }}">← Sebelumnya</a>
+        <a href="{{ url_for('index', page=pagination.prev_num, q=q, genre=selected_genre) }}" class="pagination-arrow">←</a>
         {% else %}
-        <span class="disabled">← Sebelumnya</span>
+        <span class="pagination-arrow disabled">←</span>
         {% endif %}
 
-        <span class="page-info">Halaman {{ pagination.page }} dari {{ pagination.pages }}</span>
+        <div class="pagination-pages">
+            {% for page_num in pagination.iter_pages(left_edge=1, left_current=1, right_current=2, right_edge=1) %}
+                {% if page_num %}
+                    {% if page_num == pagination.page %}
+                    <span class="page-number active" aria-current="page">{{ page_num }}</span>
+                    {% else %}
+                    <a href="{{ url_for('index', page=page_num, q=q, genre=selected_genre) }}" class="page-number">{{ page_num }}</a>
+                    {% endif %}
+                {% else %}
+                <span class="pagination-ellipsis">…</span>
+                {% endif %}
+            {% endfor %}
+        </div>
 
         {% if pagination.has_next %}
-        <a href="{{ url_for('index', page=pagination.next_num, q=q, genre=selected_genre) }}">Berikutnya →</a>
+        <a href="{{ url_for('index', page=pagination.next_num, q=q, genre=selected_genre) }}" class="pagination-arrow">→</a>
         {% else %}
-        <span class="disabled">Berikutnya →</span>
+        <span class="pagination-arrow disabled">→</span>
         {% endif %}
     </nav>
+    {% else %}
+    <nav class="pagination" id="catalog-pagination" aria-label="Navigasi halaman katalog" hidden></nav>
     {% endif %}
 </section>
 {% endblock %}
