@@ -6,69 +6,230 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/api_docs.css') }}">
 {% endblock %}
 
+{% block main_class %}api-page{% endblock %}
+{% block flash_messages %}{% endblock %}
+
 {% block header %}
-<header>
-    <div>
-        <h1>API Documentation</h1>
-        <p>Dokumentasi REST API lokal BookVault</p>
-    </div>
-    <div>
-        <a href="/">Katalog</a> |
-        <a href="/admin">Dashboard Admin</a>
-    </div>
+<header class="api-topbar">
+    <a href="/api/docs" class="api-brand">BookVault <span>API</span></a>
+
+    <nav class="api-topnav" aria-label="Navigasi dokumentasi API">
+        <a href="/admin">Admin</a>
+        <a href="/">Katalog</a>
+        <a href="/public-books">Public Books</a>
+        <a href="/admin/logout" class="logout-link">Logout</a>
+    </nav>
 </header>
 {% endblock %}
 
 {% block content %}
-<div class="panel">
-    <h2>Informasi Umum</h2>
-    <p>
-        BookVault menyediakan REST API lokal untuk membaca, menambah, mengubah,
-        dan menghapus data buku dari database SQLite.
-    </p>
-    <p>
-        Endpoint <code>POST</code>, <code>PUT</code>, dan <code>DELETE</code>
-        wajib menggunakan API key pada header:
-    </p>
+<div class="api-shell">
+    <aside class="docs-sidebar">
+        <div class="docs-sidebar__intro">
+            <span class="sidebar-label">REST API</span>
+            <strong>Reference</strong>
+            <small>Local BookVault API</small>
+        </div>
 
-    <pre>X-API-Key: bookvault-api-key-123</pre>
-</div>
+        <nav class="docs-nav" aria-label="Bagian dokumentasi">
+            <a href="#overview" class="active">Overview</a>
+            <a href="#authentication">Authentication</a>
+            <a href="#endpoints">Endpoints</a>
+            <a href="#schema">Book schema</a>
+            <a href="#errors">Errors</a>
+        </nav>
 
-<div class="panel">
-    <h2>Daftar Endpoint</h2>
+        <div class="docs-sidebar__meta">
+            <span class="sidebar-label">Base URL</span>
+            <code>http://127.0.0.1:5000</code>
+        </div>
+    </aside>
 
-    <table>
-        <thead>
-            <tr>
-                <th>Method</th>
-                <th>Endpoint</th>
-                <th>Deskripsi</th>
-                <th>API Key</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in endpoints %}
-            <tr>
-                <td class="method">{{ item.method }}</td>
-                <td><code>{{ item.endpoint }}</code></td>
-                <td>{{ item.description }}</td>
-                <td>
-                    {% if item.api_key == "Wajib" %}
-                    <span class="required">{{ item.api_key }}</span>
-                    {% else %}
-                    <span class="optional">{{ item.api_key }}</span>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
+    <main class="docs-content">
+        {% include "flash_messages.html" %}
 
-<div class="panel">
-    <h2>Contoh Body POST /api/books</h2>
+        <section class="docs-hero docs-section" id="overview" data-section="overview">
+            <div>
+                <p class="section-kicker">Developer Reference</p>
+                <h1>BookVault REST API</h1>
+                <p class="hero-copy">Interface JSON untuk membaca dan mengelola katalog buku lokal BookVault. Endpoint baca tersedia tanpa API key, sedangkan operasi mutasi dilindungi melalui header <code>X-API-Key</code>.</p>
+            </div>
 
-    <pre>{
+            <a href="#endpoints" class="primary-action">Lihat endpoint ↓</a>
+        </section>
+
+        <section class="api-summary" aria-label="Ringkasan API">
+            <article>
+                <span>Endpoints</span>
+                <strong>{{ endpoints|length }}</strong>
+                <small>route API terdokumentasi</small>
+            </article>
+            <article>
+                <span>Public Read</span>
+                <strong>3</strong>
+                <small>tanpa API key</small>
+            </article>
+            <article>
+                <span>Protected Write</span>
+                <strong>3</strong>
+                <small>memerlukan X-API-Key</small>
+            </article>
+            <article>
+                <span>Format</span>
+                <strong>JSON</strong>
+                <small>request dan response API</small>
+            </article>
+        </section>
+
+        <section class="docs-section auth-section" id="authentication" data-section="authentication">
+            <div class="section-heading">
+                <div>
+                    <p class="section-kicker">Authentication</p>
+                    <h2>API key untuk operasi write</h2>
+                </div>
+                <span class="access-note">POST · PUT · DELETE</span>
+            </div>
+
+            <div class="auth-grid">
+                <div class="auth-copy">
+                    <p>Tambahkan API key yang dikonfigurasi pada environment BookVault ke header request. Nilai key tidak ditampilkan di dokumentasi.</p>
+                    <dl class="fact-list">
+                        <div>
+                            <dt>Header</dt>
+                            <dd><code>X-API-Key</code></dd>
+                        </div>
+                        <div>
+                            <dt>Environment</dt>
+                            <dd><code>BOOKVAULT_API_KEY</code></dd>
+                        </div>
+                        <div>
+                            <dt>Failure</dt>
+                            <dd><code>401 Unauthorized</code></dd>
+                        </div>
+                    </dl>
+                </div>
+
+                <div class="code-panel">
+                    <div class="code-panel__head">
+                        <span>Request header</span>
+                        <button type="button" class="copy-button" data-copy-target="auth-header">Copy</button>
+                    </div>
+                    <pre id="auth-header"><code>X-API-Key: &lt;YOUR_API_KEY&gt;
+Content-Type: application/json</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="docs-section endpoints-section" id="endpoints" data-section="endpoints">
+            <div class="section-heading">
+                <div>
+                    <p class="section-kicker">Endpoint Reference</p>
+                    <h2>Routes</h2>
+                </div>
+                <span class="access-note">{{ endpoints|length }} endpoints</span>
+            </div>
+
+            <div class="endpoint-index" aria-label="Daftar endpoint ringkas">
+                {% for item in endpoints %}
+                <a href="#endpoint-{{ loop.index }}" class="endpoint-index__row">
+                    <span class="method method--{{ item.method|lower }}">{{ item.method }}</span>
+                    <code>{{ item.endpoint }}</code>
+                    <span>{{ item.description }}</span>
+                    <strong class="key-state {% if item.api_key == 'Wajib' %}key-state--required{% endif %}">{{ item.api_key }}</strong>
+                </a>
+                {% endfor %}
+            </div>
+
+            <div class="endpoint-details">
+                <article class="endpoint-card" id="endpoint-1">
+                    <header class="endpoint-card__head">
+                        <div>
+                            <span class="method method--get">GET</span>
+                            <code>/api/health</code>
+                        </div>
+                        <span class="key-state">Public</span>
+                    </header>
+                    <p>Mengecek apakah BookVault API sedang berjalan.</p>
+                    <div class="endpoint-columns">
+                        <div>
+                            <span class="mini-label">Success</span>
+                            <code class="status-code">200 OK</code>
+                        </div>
+                        <div class="code-panel code-panel--compact">
+                            <div class="code-panel__head">
+                                <span>Response</span>
+                                <button type="button" class="copy-button" data-copy-target="health-response">Copy</button>
+                            </div>
+                            <pre id="health-response"><code>{
+  "status": "ok",
+  "message": "BookVault API is running"
+}</code></pre>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="endpoint-card" id="endpoint-2">
+                    <header class="endpoint-card__head">
+                        <div>
+                            <span class="method method--get">GET</span>
+                            <code>/api/books</code>
+                        </div>
+                        <span class="key-state">Public</span>
+                    </header>
+                    <p>Mengambil koleksi buku lokal. Query parameter dapat digunakan untuk pencarian judul/penulis dan filter genre.</p>
+
+                    <div class="parameter-table-wrap">
+                        <table class="parameter-table">
+                            <thead>
+                                <tr><th>Parameter</th><th>Type</th><th>Required</th><th>Fungsi</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><code>q</code></td><td>string</td><td>Tidak</td><td>Mencari judul atau penulis.</td></tr>
+                                <tr><td><code>genre</code></td><td>string</td><td>Tidak</td><td>Memfilter berdasarkan genre.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="code-panel code-panel--compact">
+                        <div class="code-panel__head">
+                            <span>Example request</span>
+                            <button type="button" class="copy-button" data-copy-target="books-query">Copy</button>
+                        </div>
+                        <pre id="books-query"><code>GET /api/books?q=dazai&amp;genre=Japanese%20Literature</code></pre>
+                    </div>
+                </article>
+
+                <article class="endpoint-card" id="endpoint-3">
+                    <header class="endpoint-card__head">
+                        <div>
+                            <span class="method method--get">GET</span>
+                            <code>/api/books/&lt;id&gt;</code>
+                        </div>
+                        <span class="key-state">Public</span>
+                    </header>
+                    <p>Mengambil satu buku berdasarkan ID.</p>
+                    <div class="status-list">
+                        <span><code>200</code> Book ditemukan</span>
+                        <span><code>404</code> Book not found</span>
+                    </div>
+                </article>
+
+                <article class="endpoint-card" id="endpoint-4">
+                    <header class="endpoint-card__head">
+                        <div>
+                            <span class="method method--post">POST</span>
+                            <code>/api/books</code>
+                        </div>
+                        <span class="key-state key-state--required">API key required</span>
+                    </header>
+                    <p>Menambahkan buku baru ke katalog lokal. Field <code>title</code>, <code>author</code>, <code>genre</code>, dan <code>year</code> wajib diisi.</p>
+
+                    <div class="code-panel code-panel--compact">
+                        <div class="code-panel__head">
+                            <span>JSON body</span>
+                            <button type="button" class="copy-button" data-copy-target="post-body">Copy</button>
+                        </div>
+                        <pre id="post-body"><code>{
   "title": "No Longer Human",
   "author": "Osamu Dazai",
   "genre": "Japanese Literature",
@@ -76,28 +237,125 @@
   "rating": 4.4,
   "description": "Novel tentang alienasi, identitas, dan kehancuran psikologis.",
   "cover_image": ""
-}</pre>
-</div>
+}</code></pre>
+                    </div>
 
-<div class="panel">
-    <h2>Contoh Body PUT /api/books/&lt;id&gt;</h2>
+                    <div class="status-list">
+                        <span><code>201</code> Created</span>
+                        <span><code>400</code> Invalid input</span>
+                        <span><code>401</code> Invalid API key</span>
+                        <span><code>409</code> Duplicate book</span>
+                    </div>
+                </article>
 
-    <pre>{
+                <article class="endpoint-card" id="endpoint-5">
+                    <header class="endpoint-card__head">
+                        <div>
+                            <span class="method method--put">PUT</span>
+                            <code>/api/books/&lt;id&gt;</code>
+                        </div>
+                        <span class="key-state key-state--required">API key required</span>
+                    </header>
+                    <p>Memperbarui data buku berdasarkan ID. Field yang tidak dikirim mempertahankan nilai sebelumnya.</p>
+
+                    <div class="code-panel code-panel--compact">
+                        <div class="code-panel__head">
+                            <span>JSON body</span>
+                            <button type="button" class="copy-button" data-copy-target="put-body">Copy</button>
+                        </div>
+                        <pre id="put-body"><code>{
   "title": "No Longer Human Updated",
-  "author": "Osamu Dazai",
-  "genre": "Japanese Literature",
-  "year": 1948,
   "rating": 4.6,
-  "description": "Data buku berhasil diperbarui melalui endpoint PUT."
-}</pre>
-</div>
+  "description": "Data buku diperbarui melalui endpoint PUT."
+}</code></pre>
+                    </div>
 
-<div class="panel">
-    <h2>Contoh Response Error API Key</h2>
+                    <div class="status-list">
+                        <span><code>200</code> Updated</span>
+                        <span><code>400</code> Invalid input</span>
+                        <span><code>401</code> Invalid API key</span>
+                        <span><code>404</code> Book not found</span>
+                        <span><code>409</code> Duplicate book</span>
+                    </div>
+                </article>
 
-    <pre>{
+                <article class="endpoint-card" id="endpoint-6">
+                    <header class="endpoint-card__head">
+                        <div>
+                            <span class="method method--delete">DELETE</span>
+                            <code>/api/books/&lt;id&gt;</code>
+                        </div>
+                        <span class="key-state key-state--required">API key required</span>
+                    </header>
+                    <p>Menghapus buku berdasarkan ID. Favorite yang mereferensikan buku tersebut ikut dihapus sebelum record buku dihapus.</p>
+                    <div class="status-list">
+                        <span><code>200</code> Deleted</span>
+                        <span><code>401</code> Invalid API key</span>
+                        <span><code>404</code> Book not found</span>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section class="docs-section schema-section" id="schema" data-section="schema">
+            <div class="section-heading">
+                <div>
+                    <p class="section-kicker">Data Model</p>
+                    <h2>Book schema</h2>
+                </div>
+            </div>
+
+            <div class="parameter-table-wrap">
+                <table class="parameter-table schema-table">
+                    <thead>
+                        <tr><th>Field</th><th>Type</th><th>Required on POST</th><th>Catatan</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><code>id</code></td><td>integer</td><td>Generated</td><td>Primary key.</td></tr>
+                        <tr><td><code>title</code></td><td>string</td><td>Ya</td><td>Judul buku.</td></tr>
+                        <tr><td><code>author</code></td><td>string</td><td>Ya</td><td>Nama penulis.</td></tr>
+                        <tr><td><code>genre</code></td><td>string</td><td>Ya</td><td>Genre buku.</td></tr>
+                        <tr><td><code>year</code></td><td>integer</td><td>Ya</td><td>1000 sampai tahun berjalan.</td></tr>
+                        <tr><td><code>rating</code></td><td>number</td><td>Tidak</td><td>0 sampai 5. Default 0.</td></tr>
+                        <tr><td><code>description</code></td><td>string</td><td>Tidak</td><td>Deskripsi buku.</td></tr>
+                        <tr><td><code>cover_image</code></td><td>string</td><td>Tidak</td><td>URL cover atau string kosong.</td></tr>
+                        <tr><td><code>created_at</code></td><td>datetime</td><td>Generated</td><td>Dibuat oleh server.</td></tr>
+                        <tr><td><code>updated_at</code></td><td>datetime</td><td>Generated</td><td>Diperbarui oleh server.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="docs-section errors-section" id="errors" data-section="errors">
+            <div class="section-heading">
+                <div>
+                    <p class="section-kicker">Errors</p>
+                    <h2>Response status</h2>
+                </div>
+            </div>
+
+            <div class="error-grid">
+                <article><strong>400</strong><span>Bad Request</span><p>JSON tidak valid atau field gagal validasi.</p></article>
+                <article><strong>401</strong><span>Unauthorized</span><p>API key tidak diberikan atau tidak cocok.</p></article>
+                <article><strong>404</strong><span>Not Found</span><p>ID buku tidak ditemukan.</p></article>
+                <article><strong>409</strong><span>Conflict</span><p>Kombinasi title dan author sudah ada.</p></article>
+            </div>
+
+            <div class="code-panel error-example">
+                <div class="code-panel__head">
+                    <span>401 example</span>
+                    <button type="button" class="copy-button" data-copy-target="error-response">Copy</button>
+                </div>
+                <pre id="error-response"><code>{
   "error": "Unauthorized",
   "message": "Valid API key is required"
-}</pre>
+}</code></pre>
+            </div>
+        </section>
+    </main>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/api_docs.js') }}"></script>
 {% endblock %}
