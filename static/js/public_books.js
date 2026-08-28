@@ -7,6 +7,9 @@
 
     const PAGE_SIZE = 20;
     const INITIAL_TARGET = 20;
+    const MAX_RENDERED = 350;
+    const TOP_RELOAD_MARGIN = 700;
+
     const query = (app.dataset.query || "python").trim() || "python";
     const isAdmin = app.dataset.admin === "true";
     const hasServerError = app.dataset.hasError === "true";
@@ -21,12 +24,17 @@
 
     let provider = null;
     let totalAvailable = null;
-    let loading = false;
     let exhausted = false;
-    let observer = null;
+    let bottomObserver = null;
     let nextOffset = 0;
-    let sequenceCounter = 0;
-    const seenBooks = new Set();
+    let loadingBottom = false;
+    let loadingTop = false;
+    let scrollTicking = false;
+
+    const visibleKeys = new Set();
+    const loadedChunks = [];
+    const beforeHistory = [];
+    const afterHistory = [];
 
     const normalizeKeyPart = (value) => String(value || "")
         .toLowerCase()
@@ -45,6 +53,7 @@
     };
 
     const providerLabel = (value) => value === "google" ? "Google Books" : "Open Library";
+    const currentSort = () => sortSelect ? sortSelect.value : "relevance";
 
     const syncProviderSummary = () => {
         if (!providerName || !providerState) return;
@@ -158,10 +167,10 @@
         return details;
     };
 
-    const renderBook = (book) => {
+    const createBookRow = (book, sourceOffset, chunkProvider) => {
         const key = bookKey(book);
-        if (!key || seenBooks.has(key)) return false;
-        seenBooks.add(key);
+        if (!key || visibleKeys.has(key)) return null;
+        visibleKeys.add(key);
 
         const row = document.createElement("article");
         row.className = "public-book-row";
@@ -169,8 +178,11 @@
         row.dataset.author = book.author || "";
         row.dataset.year = book.year || "";
         row.dataset.editions = String(book.editionCount ?? "-");
-        row.dataset.source = book.source || providerLabel(provider);
-        row.dataset.sequence = String(sequenceCounter++);
+        row.dataset.source = book.source || providerLabel(chunkProvider);
+        row.dataset.sequence = String(sourceOffset);
+        row.dataset.sourceOffset = String(sourceOffset);
+        row.dataset.streamProvider = chunkProvider || "openlibrary";
+        row.dataset.bookKey = key;
 
         const media = document.createElement("div");
         media.className = "public-book-media";
@@ -194,7 +206,7 @@
         addText(titleWrap, "h2", book.title || "Tanpa Judul");
         addText(titleWrap, "p", book.author || "Tidak diketahui", "book-author");
         heading.appendChild(titleWrap);
-        addText(heading, "span", book.source || providerLabel(provider), "source-badge");
+        addText(heading, "span", book.source || providerLabel(chunkProvider), "source-badge");
         copy.appendChild(heading);
 
         const metadata = document.createElement("dl");
@@ -215,12 +227,11 @@
 
         row.appendChild(media);
         row.appendChild(copy);
-        results.appendChild(row);
-        return true;
+        return row;
     };
 
     const sortResults = () => {
-        const mode = sortSelect ? sortSelect.value : "relevance";
+        const mode = currentSort();
         const rows = getRows();
 
         rows.sort((a, b) => {
@@ -230,7 +241,9 @@
                 const yearB = parseNumber(b.dataset.year) || Number.MAX_SAFE_INTEGER;
                 return yearA - yearB;
             }
-            if (mode === "title") return a.dataset.title.localeCompare(b.dataset.title, undefined, { sensitivity: "base" });
+            if (mode === "title") {
+                return a.dataset.title.localeCompare(b.dataset.title, undefined, { sensitivity: "base" });
+            }
             if (mode === "editions") return parseNumber(b.dataset.editions) - parseNumber(a.dataset.editions);
             return parseNumber(a.dataset.sequence) - parseNumber(b.dataset.sequence);
         });
@@ -240,19 +253,29 @@
 
     const hydrateInitialRows = () => {
         const initialRows = getRows();
-        nextOffset = initialRows.length;
+        const rawCount = initialRows.length;
+        nextOffset = rawCount;
+        const nodes = [];
+        const initialProvider = provider || "openlibrary";
 
-        initialRows.forEach((row) => {
-            row.dataset.sequence = String(sequenceCounter++);
+        initialRows.forEach((row, index) => {
             const key = bookKey({ title: row.dataset.title, author: row.dataset.author });
-
-            if (seenBooks.has(key)) {
+            if (!key || visibleKeys.has(key)) {
                 row.remove();
                 return;
             }
 
-            seenBooks.add(key);
+            visibleKeys.add(key);
+            row.dataset.bookKey = key;
+            row.dataset.sequence = String(index);
+            row.dataset.sourceOffset = String(index);
+            row.dataset.streamProvider = initialProvider;
+            nodes.push(row);
         });
+
+        if (rawCount) {
+            loadedChunks.push({ start: 0, end: rawCount, provider: initialProvider, nodes });
+        }
     };
 
     const fetchOpenLibrary = async (offset, limit = PAGE_SIZE) => {
@@ -278,7 +301,9 @@
                     : "Tidak diketahui",
                 year: getYear(item.first_publish_year),
                 editionCount: item.edition_count ?? 0,
-                coverUrl: item.cover_i ? `https://covers.openlibrary.org/b/id/${item.cover_i}-M.jpg` : "",
+                coverUrl: item.cover_i
+                    ? `https://covers.openlibrary.org/b/id/${item.cover_i}-M.jpg`
+                    : "",
                 source: "Open Library"
             }))
         };
@@ -316,29 +341,10 @@
         };
     };
 
-    const updateControls = () => {
-        const loaded = getLoadedCount();
-        const reachedKnownTotal = totalAvailable !== null && nextOffset >= totalAvailable;
-
-        if (countLabel) {
-            countLabel.textContent = totalAvailable !== null
-                ? `${loaded} hasil unik dimuat · ${totalAvailable} ditemukan sumber`
-                : `${loaded} hasil unik dimuat`;
-        }
-
-        if (!sentinel) return;
-
-        if (loading) {
-            sentinel.textContent = "Memuat hasil berikutnya...";
-            sentinel.dataset.state = "loading";
-        } else if (exhausted || reachedKnownTotal) {
-            sentinel.textContent = loaded ? "Semua hasil yang tersedia sudah dimuat." : "Tidak ada hasil.";
-            sentinel.dataset.state = "done";
-            if (observer) observer.unobserve(sentinel);
-        } else {
-            sentinel.textContent = "Scroll untuk memuat hasil berikutnya";
-            sentinel.dataset.state = "ready";
-        }
+    const fetchExactProvider = (streamProvider, offset, limit) => {
+        return streamProvider === "google"
+            ? fetchGoogleBooks(offset, limit)
+            : fetchOpenLibrary(offset, limit);
     };
 
     const requestPage = async (preferredProvider, offset, limit = PAGE_SIZE) => {
@@ -352,19 +358,149 @@
         }
     };
 
+    const renderChunk = (page, startOffset, direction = "append") => {
+        const fragment = document.createDocumentFragment();
+        const nodes = [];
+
+        page.books.forEach((book, index) => {
+            const row = createBookRow(book, startOffset + index, page.provider);
+            if (!row) return;
+            nodes.push(row);
+            fragment.appendChild(row);
+        });
+
+        const chunk = {
+            start: startOffset,
+            end: startOffset + page.books.length,
+            provider: page.provider,
+            nodes
+        };
+
+        if (direction === "prepend") {
+            results.insertBefore(fragment, results.firstChild);
+            loadedChunks.unshift(chunk);
+        } else {
+            results.appendChild(fragment);
+            loadedChunks.push(chunk);
+        }
+
+        sortResults();
+        return chunk;
+    };
+
+    const removeChunk = (chunk) => {
+        chunk.nodes.forEach((node) => {
+            if (node.dataset.bookKey) visibleKeys.delete(node.dataset.bookKey);
+            node.remove();
+        });
+    };
+
+    const chunkMeta = (chunk) => ({ start: chunk.start, end: chunk.end, provider: chunk.provider });
+
+    const trimTopIfNeeded = () => {
+        if (getLoadedCount() <= MAX_RENDERED) return;
+
+        const beforeHeight = document.documentElement.scrollHeight;
+        const beforeY = window.scrollY;
+
+        while (getLoadedCount() > MAX_RENDERED && loadedChunks.length > 1) {
+            const chunk = loadedChunks.shift();
+            removeChunk(chunk);
+            beforeHistory.push(chunkMeta(chunk));
+        }
+
+        const removedHeight = beforeHeight - document.documentElement.scrollHeight;
+        if (removedHeight > 0 && currentSort() === "relevance") {
+            window.scrollTo(0, Math.max(0, beforeY - removedHeight));
+        }
+    };
+
+    const trimBottomIfNeeded = () => {
+        while (getLoadedCount() > MAX_RENDERED && loadedChunks.length > 1) {
+            const chunk = loadedChunks.pop();
+            removeChunk(chunk);
+            afterHistory.push(chunkMeta(chunk));
+        }
+    };
+
+    const updateControls = () => {
+        const loaded = getLoadedCount();
+        const firstChunk = loadedChunks[0];
+        const lastChunk = loadedChunks[loadedChunks.length - 1];
+        const start = firstChunk ? firstChunk.start + 1 : 0;
+        const end = lastChunk ? lastChunk.end : 0;
+        const hasWindowedHistory = beforeHistory.length > 0 || afterHistory.length > 0;
+        const reachedKnownTotal = totalAvailable !== null && nextOffset >= totalAvailable && afterHistory.length === 0;
+
+        if (countLabel) {
+            if (hasWindowedHistory) {
+                const totalText = totalAvailable !== null ? ` · ${totalAvailable} ditemukan sumber` : "";
+                countLabel.textContent = `${loaded} buku aktif · rentang ${start}–${end}${totalText}`;
+            } else if (totalAvailable !== null) {
+                countLabel.textContent = `${loaded} hasil unik dimuat · ${totalAvailable} ditemukan sumber`;
+            } else {
+                countLabel.textContent = `${loaded} hasil unik dimuat`;
+            }
+        }
+
+        if (!sentinel) return;
+
+        if (loadingBottom) {
+            sentinel.textContent = afterHistory.length
+                ? "Memuat kembali hasil berikutnya..."
+                : "Memuat hasil berikutnya...";
+            sentinel.dataset.state = "loading";
+        } else if (afterHistory.length > 0) {
+            sentinel.textContent = "Scroll untuk memuat kembali hasil berikutnya";
+            sentinel.dataset.state = "ready";
+        } else if (exhausted || reachedKnownTotal) {
+            sentinel.textContent = loaded ? "Semua hasil yang tersedia sudah dimuat." : "Tidak ada hasil.";
+            sentinel.dataset.state = "done";
+        } else {
+            sentinel.textContent = "Scroll untuk memuat hasil berikutnya";
+            sentinel.dataset.state = "ready";
+        }
+    };
+
+    const restoreAfterChunk = async () => {
+        const meta = afterHistory.pop();
+        if (!meta) return false;
+
+        try {
+            const page = await fetchExactProvider(meta.provider, meta.start, meta.end - meta.start);
+            if (!page.books.length) throw new Error("Empty restored page");
+            renderChunk(page, meta.start, "append");
+            trimTopIfNeeded();
+            return true;
+        } catch (error) {
+            afterHistory.push(meta);
+            console.error("Could not restore later public books:", error);
+            setStatus("Bagian hasil berikutnya belum dapat dimuat ulang. Coba scroll lagi beberapa saat.", "error");
+            return false;
+        }
+    };
+
     const appendNextPage = async (requestedLimit = PAGE_SIZE) => {
-        if (loading || exhausted) return;
-        if (totalAvailable !== null && nextOffset >= totalAvailable) {
+        if (loadingBottom) return;
+
+        if (!afterHistory.length && (exhausted || (totalAvailable !== null && nextOffset >= totalAvailable))) {
             exhausted = true;
             updateControls();
             return;
         }
 
-        loading = true;
+        loadingBottom = true;
         updateControls();
 
         try {
-            const page = await requestPage(provider || "openlibrary", nextOffset, requestedLimit);
+            if (afterHistory.length) {
+                const restored = await restoreAfterChunk();
+                if (restored) clearStatus();
+                return;
+            }
+
+            const startOffset = nextOffset;
+            const page = await requestPage(provider || "openlibrary", startOffset, requestedLimit);
             const previousProvider = provider;
             provider = page.provider;
             totalAvailable = page.total;
@@ -378,26 +514,53 @@
             }
 
             nextOffset += rawCount;
-            let added = 0;
-            page.books.forEach((book) => {
-                if (renderBook(book)) added += 1;
-            });
+            const chunk = renderChunk(page, startOffset, "append");
+            trimTopIfNeeded();
 
             if (rawCount < requestedLimit) exhausted = true;
             if (previousProvider && previousProvider !== provider) {
                 setStatus("Open Library tidak merespons. Hasil berikutnya dilanjutkan dari Google Books.", "info");
-            } else if (!added) {
+            } else if (!chunk.nodes.length) {
                 setStatus("Batch ini hanya berisi hasil duplikat. Melanjutkan pencarian saat scroll berikutnya.", "empty");
             } else {
                 clearStatus();
             }
-
-            sortResults();
         } catch (error) {
             console.error("Could not load additional public books:", error);
             setStatus("Hasil tambahan belum dapat dimuat. Scroll keluar lalu kembali ke bawah untuk mencoba lagi.", "error");
         } finally {
-            loading = false;
+            loadingBottom = false;
+            updateControls();
+        }
+    };
+
+    const prependPreviousChunk = async () => {
+        if (loadingTop || !beforeHistory.length) return;
+
+        const meta = beforeHistory.pop();
+        loadingTop = true;
+        const beforeHeight = document.documentElement.scrollHeight;
+        const beforeY = window.scrollY;
+
+        try {
+            const page = await fetchExactProvider(meta.provider, meta.start, meta.end - meta.start);
+            if (!page.books.length) throw new Error("Empty restored page");
+
+            renderChunk(page, meta.start, "prepend");
+            trimBottomIfNeeded();
+
+            if (currentSort() === "relevance") {
+                const heightDelta = document.documentElement.scrollHeight - beforeHeight;
+                if (heightDelta > 0) window.scrollTo(0, beforeY + heightDelta);
+            }
+
+            clearStatus();
+        } catch (error) {
+            beforeHistory.push(meta);
+            console.error("Could not restore earlier public books:", error);
+            setStatus("Bagian hasil sebelumnya belum dapat dimuat ulang. Coba scroll ke atas lagi beberapa saat.", "error");
+        } finally {
+            loadingTop = false;
             updateControls();
         }
     };
@@ -412,6 +575,16 @@
         }
     };
 
+    const resetWindowState = () => {
+        results.innerHTML = "";
+        visibleKeys.clear();
+        loadedChunks.length = 0;
+        beforeHistory.length = 0;
+        afterHistory.length = 0;
+        nextOffset = 0;
+        exhausted = false;
+    };
+
     const loadBrowserFallback = async () => {
         setStatus("Server belum mendapat hasil. Mencoba sumber publik langsung dari browser...", "info");
 
@@ -424,16 +597,13 @@
                 firstPage = await fetchGoogleBooks(0, PAGE_SIZE);
             }
 
-            results.innerHTML = "";
-            seenBooks.clear();
-            sequenceCounter = 0;
+            resetWindowState();
             provider = firstPage.provider;
             totalAvailable = firstPage.total;
             nextOffset = firstPage.books.length;
-            firstPage.books.forEach(renderBook);
+            renderChunk(firstPage, 0, "append");
             exhausted = firstPage.books.length < PAGE_SIZE;
             syncProviderSummary();
-            sortResults();
 
             if (errorBox) errorBox.hidden = true;
 
@@ -451,17 +621,34 @@
         }
     };
 
-    const setupInfiniteScroll = () => {
+    const setupBottomInfiniteScroll = () => {
         if (!sentinel || !("IntersectionObserver" in window)) return;
 
-        observer = new IntersectionObserver(
+        bottomObserver = new IntersectionObserver(
             (entries) => {
                 const entry = entries[0];
                 if (entry && entry.isIntersecting) appendNextPage();
             },
             { root: null, rootMargin: "500px 0px", threshold: 0.01 }
         );
-        observer.observe(sentinel);
+        bottomObserver.observe(sentinel);
+    };
+
+    const setupTopReload = () => {
+        window.addEventListener("scroll", () => {
+            if (scrollTicking) return;
+            scrollTicking = true;
+
+            window.requestAnimationFrame(() => {
+                scrollTicking = false;
+                if (!beforeHistory.length || loadingTop || loadingBottom) return;
+
+                const distanceFromGridTop = results.getBoundingClientRect().top;
+                if (distanceFromGridTop > -TOP_RELOAD_MARGIN) {
+                    prependPreviousChunk();
+                }
+            });
+        }, { passive: true });
     };
 
     const bootstrap = async () => {
@@ -472,16 +659,23 @@
         updateControls();
 
         if (sortSelect) {
-            sortSelect.addEventListener("change", sortResults);
+            sortSelect.addEventListener("change", () => {
+                sortResults();
+                updateControls();
+            });
         }
 
         if (hasServerError || getLoadedCount() === 0) {
             await loadBrowserFallback();
+            if (getLoadedCount() < INITIAL_TARGET && !exhausted) {
+                await fillInitialGrid();
+            }
         } else {
             await fillInitialGrid();
         }
 
-        setupInfiniteScroll();
+        setupBottomInfiniteScroll();
+        setupTopReload();
     };
 
     bootstrap();
