@@ -7,85 +7,187 @@
 {% endblock %}
 
 {% block header %}
-<header>
-    <h1>Dashboard User</h1>
-    <p>Selamat datang, {{ username }}.</p>
-    <p>
-        <a href="/">Katalog Buku</a> |
-        <a href="/public-books">Data Buku API Publik</a> |
+<header class="user-header">
+    <a href="/" class="user-brand">BookVault</a>
+    <nav class="user-header-nav" aria-label="Navigasi user">
+        <a href="/">Katalog</a>
+        <a href="/public-books">Public Books</a>
         <a href="/logout">Logout</a>
-    </p>
+    </nav>
 </header>
 {% endblock %}
 
 {% block content %}
-<div class="panel">
-    <h2>Informasi Akun</h2>
-
-    <div class="user-stats">
-        <div class="user-stat-card">
-            <span class="label">Username</span>
-            <strong>{{ username }}</strong>
-        </div>
-
-        <div class="user-stat-card">
-            <span class="label">Role</span>
-            <strong>{{ role }}</strong>
-        </div>
-
-        <div class="user-stat-card">
-            <span class="label">Total Favorit</span>
-            <strong>{{ total_favorites }}</strong>
-        </div>
-
-        <div class="user-stat-card">
-            <span class="label">Total Buku</span>
-            <strong>{{ total_books }}</strong>
-        </div>
+<section class="library-intro" aria-labelledby="library-title">
+    <div>
+        <span class="eyebrow">My Library</span>
+        <h1 id="library-title">Personal Library</h1>
+        <p>Selamat datang, <strong>{{ username }}</strong>. Kelola koleksi favorit dan kembali ke buku yang ingin kamu simpan.</p>
     </div>
 
-    <p class="dashboard-note">
-        Di halaman ini, Anda dapat melihat daftar buku favorit yang sudah disimpan.
-    </p>
-</div>
+    <a href="/" class="primary-action">Jelajahi Katalog</a>
+</section>
 
-<h2>Buku Favorit Saya</h2>
+<section class="library-stats" aria-label="Ringkasan koleksi">
+    <article class="library-stat">
+        <span class="stat-label">Buku Favorit</span>
+        <strong>{{ total_favorites }}</strong>
+        <small>Tersimpan di koleksi pribadi</small>
+    </article>
 
-{% if favorites %}
-<div class="grid">
-    {% for favorite in favorites %}
-    <div class="card">
-        {% if favorite.book.cover_image %}
-        <img src="{{ favorite.book.cover_image }}" alt="Cover {{ favorite.book.title }}" class="book-cover">
-        {% else %}
-        <div class="book-cover cover-placeholder">
-            <span>No Cover</span>
+    <article class="library-stat">
+        <span class="stat-label">Katalog Tersedia</span>
+        <strong>{{ total_books }}</strong>
+        <small>Buku di katalog lokal</small>
+    </article>
+
+    <article class="library-stat">
+        <span class="stat-label">Genre Favorit</span>
+        <strong id="favorite-genre">{% if favorites %}Menghitung…{% else %}—{% endif %}</strong>
+        <small>Berdasarkan koleksi tersimpan</small>
+    </article>
+</section>
+
+<section class="library-overview">
+    <article class="overview-panel account-panel">
+        <div class="section-heading">
+            <span class="eyebrow">Account</span>
+            <h2>Collection Profile</h2>
         </div>
-        {% endif %}
 
-        <h3>{{ favorite.book.title }}</h3>
+        <dl class="profile-list">
+            <div>
+                <dt>Username</dt>
+                <dd>{{ username }}</dd>
+            </div>
+            <div>
+                <dt>Role</dt>
+                <dd>{{ role }}</dd>
+            </div>
+            <div>
+                <dt>Saved Books</dt>
+                <dd>{{ total_favorites }}</dd>
+            </div>
+        </dl>
 
-        <div class="meta">
-            {{ favorite.book.author }} • {{ favorite.book.year }} • {{ favorite.book.genre }}
+        <div class="quick-actions" aria-label="Aksi cepat">
+            <a href="/">Browse Catalog</a>
+            <a href="/public-books">Explore Public Books</a>
+        </div>
+    </article>
+
+    <article class="overview-panel recent-panel">
+        <div class="section-heading">
+            <span class="eyebrow">Activity</span>
+            <h2>Recently Saved</h2>
         </div>
 
-        <p>{{ favorite.book.description }}</p>
-
-        {% if favorite.book.rating and favorite.book.rating > 0 %}
-        <p class="rating">Rating: {{ favorite.book.rating }}</p>
+        {% if favorites %}
+        <div class="recent-list">
+            {% for favorite in favorites[:3] %}
+            <a href="/book/{{ favorite.book.id }}" class="recent-item">
+                <span class="recent-index">0{{ loop.index }}</span>
+                <span class="recent-copy">
+                    <strong>{{ favorite.book.title }}</strong>
+                    <small>{{ favorite.book.author }} · {{ favorite.book.genre }}</small>
+                </span>
+                <time datetime="{{ favorite.created_at.isoformat() }}">{{ favorite.created_at.strftime('%d %b %Y') }}</time>
+            </a>
+            {% endfor %}
+        </div>
         {% else %}
-        <p class="rating">Rating: Belum dinilai</p>
+        <p class="empty-copy">Belum ada aktivitas favorit. Koleksi ini masih sangat disiplin dalam menjaga kehampaan.</p>
         {% endif %}
+    </article>
+</section>
 
-        <a href="/book/{{ favorite.book.id }}">Lihat Detail</a>
-
-        <form method="POST" action="/favorite/remove/{{ favorite.book.id }}" class="favorite-form">
-            <button type="submit">Hapus dari Favorit</button>
-        </form>
+<section class="favorites-section" aria-labelledby="favorites-title">
+    <div class="favorites-heading-row">
+        <div class="section-heading">
+            <span class="eyebrow">Collection</span>
+            <h2 id="favorites-title">My Favorites</h2>
+        </div>
+        <span class="result-count" id="favorite-result-count">{{ total_favorites }} buku</span>
     </div>
-    {% endfor %}
-</div>
-{% else %}
-<p class="empty">Belum ada buku favorit. Silakan pilih buku dari halaman katalog.</p>
-{% endif %}
+
+    {% if favorites %}
+    <div class="favorite-toolbar">
+        <label class="search-control">
+            <span class="sr-only">Cari buku favorit</span>
+            <input id="favorite-search" type="search" placeholder="Cari judul atau penulis..." autocomplete="off">
+        </label>
+
+        <label class="genre-control">
+            <span class="sr-only">Filter genre favorit</span>
+            <select id="favorite-genre-filter">
+                <option value="">Semua Genre</option>
+            </select>
+        </label>
+    </div>
+
+    <div class="favorite-list" id="favorite-list">
+        <div class="favorite-list-head" aria-hidden="true">
+            <span>Buku</span>
+            <span>Genre</span>
+            <span>Rating</span>
+            <span>Aksi</span>
+        </div>
+
+        {% for favorite in favorites %}
+        <article
+            class="favorite-row"
+            data-title="{{ favorite.book.title|lower }}"
+            data-author="{{ favorite.book.author|lower }}"
+            data-genre="{{ favorite.book.genre }}"
+        >
+            <div class="favorite-book">
+                {% if favorite.book.cover_image %}
+                <img src="{{ favorite.book.cover_image }}" alt="Cover {{ favorite.book.title }}" class="favorite-cover">
+                {% else %}
+                <div class="favorite-cover cover-placeholder" aria-hidden="true">No Cover</div>
+                {% endif %}
+
+                <div class="favorite-book-copy">
+                    <h3>{{ favorite.book.title }}</h3>
+                    <p>{{ favorite.book.author }} · {{ favorite.book.year }}</p>
+                    {% if favorite.book.description %}
+                    <small>{{ favorite.book.description }}</small>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="favorite-genre">{{ favorite.book.genre }}</div>
+
+            <div class="favorite-rating">
+                {% if favorite.book.rating and favorite.book.rating > 0 %}
+                {{ favorite.book.rating }} / 5
+                {% else %}
+                Belum dinilai
+                {% endif %}
+            </div>
+
+            <div class="favorite-actions">
+                <a href="/book/{{ favorite.book.id }}">Detail</a>
+                <form method="POST" action="/favorite/remove/{{ favorite.book.id }}" class="favorite-form">
+                    <button type="submit">Hapus</button>
+                </form>
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+
+    <p class="filter-empty" id="favorite-filter-empty" hidden>Tidak ada buku favorit yang cocok dengan filter ini.</p>
+    {% else %}
+    <div class="collection-empty">
+        <span class="eyebrow">Empty Collection</span>
+        <h3>Belum ada buku favorit.</h3>
+        <p>Simpan buku dari katalog untuk mulai membangun koleksi pribadi.</p>
+        <a href="/" class="primary-action">Buka Katalog</a>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/user_dashboard.js') }}"></script>
 {% endblock %}
