@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Login User - BookVault{% endblock %}
+{% block title %}Sign In - BookVault{% endblock %}
 
 {% block styles %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
@@ -10,29 +10,58 @@
 {% block flash_messages %}{% endblock %}
 
 {% block content %}
-<div class="login-box">
-    <h1>Login User</h1>
+<section class="auth-shell" aria-labelledby="login-title">
+    <div class="auth-intro">
+        <a href="/" class="auth-brand">BookVault</a>
+        <span class="auth-eyebrow">Access</span>
+        <h1 id="login-title">Masuk ke BookVault.</h1>
+        <p class="auth-lead">Satu pintu masuk untuk akun user dan admin. BookVault membaca role akun setelah kredensial tervalidasi lalu mengarahkanmu ke ruang kerja yang tepat.</p>
 
-    {% include "flash_messages.html" %}
-
-    {% if error %}
-    <p class="error">{{ error }}</p>
-    {% endif %}
-
-    <form method="POST" action="/login">
-        <label>Username</label>
-        <input type="text" name="username" required>
-
-        <label>Password</label>
-        <input type="password" name="password" required>
-
-        <button type="submit">Login</button>
-    </form>
-
-    <div class="hint">
-        <a href="/register">Register</a> |
-        <a href="/">Kembali ke Katalog</a> |
-        <a href="/admin/login">Login Admin</a>
+        <div class="role-guide" aria-label="Tujuan berdasarkan role akun">
+            <div>
+                <span>User</span>
+                <strong>Personal Library</strong>
+                <small>Favorit, koleksi pribadi, dan katalog.</small>
+            </div>
+            <div>
+                <span>Admin</span>
+                <strong>Administration</strong>
+                <small>Manajemen katalog, import, dan API docs.</small>
+            </div>
+        </div>
     </div>
-</div>
+
+    <div class="auth-panel">
+        <div class="auth-panel__heading">
+            <span class="auth-eyebrow">Credentials</span>
+            <h2>Sign in</h2>
+            <p>Tidak perlu memilih role. Akses ditentukan dari akun yang tersimpan di sistem.</p>
+        </div>
+
+        {% include "flash_messages.html" %}
+
+        {% if error %}
+        <p class="error">{{ error }}</p>
+        {% endif %}
+
+        <form method="POST" action="/login" class="auth-form">
+            <label>
+                <span>Username</span>
+                <input type="text" name="username" autocomplete="username" autofocus required>
+            </label>
+
+            <label>
+                <span>Password</span>
+                <input type="password" name="password" autocomplete="current-password" required>
+            </label>
+
+            <button type="submit">Sign in</button>
+        </form>
+
+        <div class="auth-links">
+            <p>Belum punya akun? <a href="/register">Buat akun user</a></p>
+            <a href="/" class="back-link">← Kembali ke katalog</a>
+        </div>
+    </div>
+</section>
 {% endblock %}
