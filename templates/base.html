@@ -6,6 +6,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}BookVault{% endblock %}</title>
 
+    <script>
+        (() => {
+            const savedTheme = localStorage.getItem("bookvault-theme");
+            const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+            document.documentElement.dataset.theme = savedTheme || (prefersDark ? "dark" : "light");
+        })();
+    </script>
+
     <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
     {% block styles %}{% endblock %}
 </head>
@@ -23,6 +31,17 @@
         {% block content %}{% endblock %}
     </main>
 
+    <button
+        type="button"
+        class="theme-toggle"
+        id="theme-toggle"
+        aria-label="Ganti tema warna"
+        aria-pressed="false"
+    >
+        Dark mode
+    </button>
+
+    <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
     {% block scripts %}{% endblock %}
 </body>
 
