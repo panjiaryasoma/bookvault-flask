@@ -5,7 +5,8 @@
         return;
     }
 
-    const PAGE_SIZE = 12;
+    const PAGE_SIZE = 20;
+    const INITIAL_TARGET = 20;
     const query = (app.dataset.query || "python").trim() || "python";
     const isAdmin = app.dataset.admin === "true";
     const hasServerError = app.dataset.hasError === "true";
@@ -254,10 +255,10 @@
         });
     };
 
-    const fetchOpenLibrary = async (offset) => {
+    const fetchOpenLibrary = async (offset, limit = PAGE_SIZE) => {
         const endpoint = new URL("https://openlibrary.org/search.json");
         endpoint.searchParams.set("q", query);
-        endpoint.searchParams.set("limit", String(PAGE_SIZE));
+        endpoint.searchParams.set("limit", String(limit));
         endpoint.searchParams.set("offset", String(offset));
         endpoint.searchParams.set("fields", "title,author_name,first_publish_year,edition_count,cover_i");
 
@@ -283,10 +284,10 @@
         };
     };
 
-    const fetchGoogleBooks = async (offset) => {
+    const fetchGoogleBooks = async (offset, limit = PAGE_SIZE) => {
         const endpoint = new URL("https://www.googleapis.com/books/v1/volumes");
         endpoint.searchParams.set("q", query);
-        endpoint.searchParams.set("maxResults", String(PAGE_SIZE));
+        endpoint.searchParams.set("maxResults", String(limit));
         endpoint.searchParams.set("startIndex", String(offset));
         endpoint.searchParams.set("printType", "books");
 
@@ -340,18 +341,18 @@
         }
     };
 
-    const requestPage = async (preferredProvider, offset) => {
-        if (preferredProvider === "google") return fetchGoogleBooks(offset);
+    const requestPage = async (preferredProvider, offset, limit = PAGE_SIZE) => {
+        if (preferredProvider === "google") return fetchGoogleBooks(offset, limit);
 
         try {
-            return await fetchOpenLibrary(offset);
+            return await fetchOpenLibrary(offset, limit);
         } catch (error) {
             console.warn("Open Library page failed, switching to Google Books:", error);
-            return fetchGoogleBooks(offset);
+            return fetchGoogleBooks(offset, limit);
         }
     };
 
-    const appendNextPage = async () => {
+    const appendNextPage = async (requestedLimit = PAGE_SIZE) => {
         if (loading || exhausted) return;
         if (totalAvailable !== null && nextOffset >= totalAvailable) {
             exhausted = true;
@@ -363,7 +364,7 @@
         updateControls();
 
         try {
-            const page = await requestPage(provider || "openlibrary", nextOffset);
+            const page = await requestPage(provider || "openlibrary", nextOffset, requestedLimit);
             const previousProvider = provider;
             provider = page.provider;
             totalAvailable = page.total;
@@ -382,7 +383,7 @@
                 if (renderBook(book)) added += 1;
             });
 
-            if (rawCount < PAGE_SIZE) exhausted = true;
+            if (rawCount < requestedLimit) exhausted = true;
             if (previousProvider && previousProvider !== provider) {
                 setStatus("Open Library tidak merespons. Hasil berikutnya dilanjutkan dari Google Books.", "info");
             } else if (!added) {
@@ -401,16 +402,26 @@
         }
     };
 
+    const fillInitialGrid = async () => {
+        let attempts = 0;
+
+        while (getLoadedCount() < INITIAL_TARGET && !exhausted && attempts < 5) {
+            const needed = INITIAL_TARGET - getLoadedCount();
+            await appendNextPage(Math.min(PAGE_SIZE, needed));
+            attempts += 1;
+        }
+    };
+
     const loadBrowserFallback = async () => {
         setStatus("Server belum mendapat hasil. Mencoba sumber publik langsung dari browser...", "info");
 
         try {
             let firstPage;
             try {
-                firstPage = await fetchOpenLibrary(0);
+                firstPage = await fetchOpenLibrary(0, PAGE_SIZE);
             } catch (openLibraryError) {
                 console.warn("Browser Open Library fallback failed:", openLibraryError);
-                firstPage = await fetchGoogleBooks(0);
+                firstPage = await fetchGoogleBooks(0, PAGE_SIZE);
             }
 
             results.innerHTML = "";
@@ -440,17 +451,9 @@
         }
     };
 
-    provider = normalizeProvider(app.dataset.provider);
-    hydrateInitialRows();
-    syncProviderSummary();
-    sortResults();
-    updateControls();
+    const setupInfiniteScroll = () => {
+        if (!sentinel || !("IntersectionObserver" in window)) return;
 
-    if (sortSelect) {
-        sortSelect.addEventListener("change", sortResults);
-    }
-
-    if (sentinel && "IntersectionObserver" in window) {
         observer = new IntersectionObserver(
             (entries) => {
                 const entry = entries[0];
@@ -459,9 +462,27 @@
             { root: null, rootMargin: "500px 0px", threshold: 0.01 }
         );
         observer.observe(sentinel);
-    }
+    };
 
-    if (hasServerError || getLoadedCount() === 0) {
-        loadBrowserFallback();
-    }
+    const bootstrap = async () => {
+        provider = normalizeProvider(app.dataset.provider);
+        hydrateInitialRows();
+        syncProviderSummary();
+        sortResults();
+        updateControls();
+
+        if (sortSelect) {
+            sortSelect.addEventListener("change", sortResults);
+        }
+
+        if (hasServerError || getLoadedCount() === 0) {
+            await loadBrowserFallback();
+        } else {
+            await fillInitialGrid();
+        }
+
+        setupInfiniteScroll();
+    };
+
+    bootstrap();
 })();
