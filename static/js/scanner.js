@@ -29,7 +29,7 @@
     }
     function apply(result) {
         for (const k of ["title","author","isbn","publisher","language","year","pages","genre"]) {
-            if (result[k]!==undefined && result[k]!=="" && result[k]!==null) form.elements[k].value=result[k];
+            form.elements[k].value=result[k]??"";
         }
         saveStatus.textContent="Periksa kecocokan edisi dan metadata sebelum menyimpan.";
     }
@@ -52,6 +52,12 @@
         } catch(error) {if(epoch===lookupEpoch)status.textContent=error.message;}
     }
     $("lookup-button").addEventListener("click",lookup);
+    for(const id of ["lookup-isbn","lookup-query"]) $(id).addEventListener("input",()=>{lookupEpoch++;$("scan-results").replaceChildren();status.textContent="";});
+    function validISBN(raw) {
+        if(/^97[89][0-9]{10}$/.test(raw))return [...raw].reduce((s,c,i)=>s+Number(c)*(i%2?3:1),0)%10===0;
+        if(/^[0-9]{9}[0-9X]$/.test(raw))return [...raw].reduce((s,c,i)=>s+(c==="X"?10:Number(c))*(10-i),0)%11===0;
+        return false;
+    }
     $("start-camera").addEventListener("click",async()=>{
         if(!navigator.mediaDevices?.getUserMedia){status.textContent="Kamera membutuhkan HTTPS. Gunakan foto sampul atau input manual.";return;}
         const epoch=++cameraEpoch;
@@ -66,7 +72,7 @@
                 if(epoch!==cameraEpoch){control?.stop();return;}
                 if(!result||detected)return;
                 const raw=result.getText().replace(/[\s-]/g,"");
-                if(!/^(97[89]\d{10}|\d{9}[\dX])$/.test(raw))return;
+                if(!validISBN(raw))return;
                 detected=true;control?.stop();stopCamera();
                 $("lookup-isbn").value=raw; form.elements.isbn.value=raw; lookup();
             });
@@ -79,7 +85,7 @@
         const file=event.target.files[0];
         if(!file||ocrBusy)return;
         if(file.size>12*1024*1024||!["image/jpeg","image/png","image/webp"].includes(file.type)){status.textContent="Gunakan JPEG, PNG, atau WebP maksimal 12 MB.";return;}
-        stopCamera();ocrBusy=true;event.target.disabled=true;status.textContent="Menyiapkan OCR lokal…";
+        stopCamera();lookupEpoch++;$("scan-results").replaceChildren();ocrBusy=true;event.target.disabled=true;status.textContent="Menyiapkan OCR lokal…";
         let bitmap=null;
         try {
             bitmap=await createImageBitmap(file);
@@ -106,7 +112,7 @@
             let result=await api(path,editId?"PUT":"POST",data);
             if(result.response.status===409&&result.data.duplicates&&confirm(result.data.error)){data.confirm_duplicate=true;result=await api(path,"POST",data);}
             if(!result.response.ok)throw Error(result.data.error||"Gagal menyimpan.");
-            if(next&&!editId){form.reset();token=crypto.randomUUID();$("lookup-isbn").value="";$("lookup-query").value="";$("scan-results").replaceChildren();saveStatus.textContent="Tersimpan. Siap untuk buku berikutnya.";}
+            if(next&&!editId){stopCamera();lookupEpoch++;form.reset();token=crypto.randomUUID();status.textContent="";$("lookup-isbn").value="";$("lookup-query").value="";$("scan-results").replaceChildren();saveStatus.textContent="Tersimpan. Siap untuk buku berikutnya.";}
             else location.assign("/library/");
         }catch(error){saveStatus.textContent=error.message;}
         finally{busy=false;$("save-copy").disabled=false;if($("save-next"))$("save-next").disabled=false;}

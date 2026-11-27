@@ -21,7 +21,9 @@ FIELDS = {"title": 300, "author": 200, "publisher": 200, "language": 40, "transl
 ISBN_RE = re.compile(r"^[0-9]{9}[0-9X]$|^[0-9]{13}$")
 
 def isbn13(value):
-    value = re.sub(r"[\s-]", "", str(value or "")).upper()
+    if not isinstance(value,str):
+        raise ValueError("ISBN harus berupa teks.")
+    value = re.sub(r"[\s-]", "", value).upper()
     if not ISBN_RE.fullmatch(value):
         raise ValueError("ISBN tidak valid.")
     if len(value) == 10:
@@ -59,7 +61,10 @@ def validate(data):
     result = {k: clean(data.get(k, ""), n) for k,n in FIELDS.items()}
     if not result["title"] or not result["author"]:
         raise ValueError("Judul dan penulis wajib diisi.")
-    result["isbn"] = isbn13(data["isbn"]) if data.get("isbn") else ""
+    raw_isbn = data.get("isbn", "")
+    if not isinstance(raw_isbn, str):
+        raise ValueError("ISBN harus berupa teks.")
+    result["isbn"] = isbn13(raw_isbn) if raw_isbn.strip() else ""
     result["year"] = positive_int(data.get("year"), datetime.now().year)
     result["pages"] = positive_int(data.get("pages"), 100000)
     result["genre"] = result["genre"] or "Unclassified"
@@ -91,11 +96,16 @@ def lookup_metadata(query, isbn=None):
     headers = {"User-Agent":"BookVault/2.0 (https://github.com/panjiaryasoma/bookvault-flask)"}
     results = []
     def get(url, params):
-        response = requests.get(url, params=params, headers=headers, timeout=(3,5), allow_redirects=False)
-        response.raise_for_status()
-        if response.status_code != 200 or len(response.content) > 2_000_000:
-            raise ValueError("Invalid provider response")
-        return response.json()
+        with requests.get(url, params=params, headers=headers, timeout=(3,5), allow_redirects=False, stream=True) as response:
+            response.raise_for_status()
+            if response.status_code != 200:
+                raise ValueError("Invalid provider response")
+            body=bytearray()
+            for chunk in response.iter_content(65536):
+                body.extend(chunk)
+                if len(body)>2_000_000:
+                    raise ValueError("Provider response too large")
+            return json.loads(body)
     def values(v):
         return [str(x)[:100] for x in v[:30]] if isinstance(v,list) else []
     def add(title, author, year, publisher, language, pages, ids, subjects, source):
@@ -241,7 +251,8 @@ def register_library(app, db, User, throttle):
         data=request.get_json(silent=True)
         if not isinstance(data,dict): return jsonify(error="Invalid JSON"),400
         try:
-            code=isbn13(data["isbn"]) if data.get("isbn") else None
+            raw_isbn=clean(data.get("isbn",""),32)
+            code=isbn13(raw_isbn) if raw_isbn else None
             query=clean(data.get("query",""),240)
             if not code and len(query)<2: raise ValueError("Masukkan ISBN atau judul.")
         except (ValueError,TypeError): return jsonify(error="ISBN atau judul tidak valid."),400
