@@ -1,0 +1,35 @@
+# Smart Library — feature branch
+
+Status: development preview. Do not deploy until CI, migration rehearsal, real Android scanner tests and security review pass.
+
+## Local startup
+
+1. Back up the original `bookvault.db` BEFORE checking out this branch. Never commit private data.
+2. Copy .env.example to .env, generate separate random API and session secrets (python -c "import secrets; print(secrets.token_urlsafe(48))").
+3. Install Python deps: pip install -r requirements.txt.
+4. Install scanner assets: npm install --ignore-scripts; npm run build. Commit/review the generated package-lock.json before a production build; use npm ci --ignore-scripts thereafter.
+5. Run flask --app app init-db (or use the explicit migration below); create an admin only if needed with flask --app app create-admin USERNAME.
+6. Run flask --app app run. Local collection data defaults to instance/bookvault.db. Scanner works on localhost or HTTPS. Use a normal user account for physical collections.
+
+## Migration
+
+Use an empty destination only. First copy the legacy SQLite file to a separate safe path. Set DATABASE_URL for the destination, then:
+`python scripts/migrate_legacy.py --legacy /path/to/backup.db`
+The migration preserves public catalog, user IDs and favorites; existing admin credentials are disabled intentionally. Reset with flask --app app reset-admin-password USERNAME. No favorites are inferred to be owned physical books. Do not run this against a populated target. Verify counts and take backup. Existing old database was tracked on main; branch removal does not erase Git history. Rotate legacy credentials if that data ever contained real users.
+
+## Supabase deployment (not provisioned)
+
+Use a dedicated project and a session-pooler or direct PostgreSQL URL, TLS (prefer verify-full with trusted CA), and server-only credentials. Run init-db or migration before starting Flask. Run deploy/supabase_privacy.sql as the database owner, verify that anon/authenticated cannot read or write any BookVault tables, disable Data API if unused, and use a dedicated least-privilege app role with appropriate authorization before public exposure. Flask session auth is retained. Set BOOKVAULT_SECURE_COOKIES=1 and BOOKVAULT_TRUSTED_HOSTS to the deployed host. Configure a production WSGI server, ingress rate limiting, network restrictions and backups. Never put DB credentials or API key in JS. Per-process auth/lookup rate limiter is not distributed and needs ingress support. Supabase Storage upload, offline sync, AI enrichment and bulk scan are not implemented.
+
+## Verification
+
+python -m unittest discover -s tests -v
+python -m compileall -q app.py library_metadata.py library_routes.py scripts tests
+npm run build
+node --check static/js/scanner.js
+pip-audit -r requirements.txt
+npm audit --audit-level=high
+
+TEST_DATABASE_URL may point to a disposable PostgreSQL test database. **Tests drop all app tables. Never point them at any real database.**
+
+Manual browser gates: Android Chrome HTTPS camera permission grant/deny/revoke; valid ISBN barcode and invalid QR/EAN; rotate camera / pagehide; offline dependency failure; OCR English & Indonesian covers (old no-ISBN, stylized title); huge image rejection; cancel lookup while another query starts; keyboard and mobile widths; existing light/dark toggle; verify duplicate editions, filters, and actual Supabase RLS/grants. No security claim without completed gates.
