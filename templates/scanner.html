@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit copy' if copy_id else 'Scan a book' }} - BookVault{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{{ url_for('static', filename='css/user_dashboard.css') }}"><link rel="stylesheet" href="{{ url_for('static', filename='css/library.css') }}">{% endblock %}
+{% block header %}<header class="user-topbar"><a href="{{ url_for('library.index') }}" class="user-brand">BookVault <span>Library</span></a><nav class="user-topnav"><a href="{{ url_for('library.index') }}">Collection</a><a href="/user/dashboard">Favorites</a></nav></header>{% endblock %}
+{% block content %}
+<section class="scan-intro"><span class="eyebrow">Personal Archive / Cataloging</span><h1>{{ 'Edit copy' if copy_id else 'Scan a book' }}</h1><p>{{ 'Perbarui data eksemplar ini.' if copy_id else 'Pindai ISBN, baca sampul, atau isi data secara manual. Periksa hasil sebelum menyimpan.' }}</p></section>
+<div class="scan-layout" id="scanner" data-copy-id="{{ copy_id }}" data-token="{{ token }}">
+  <section class="scan-panel" aria-labelledby="capture-title">
+    <h2 id="capture-title">01 / Identify</h2>
+    <div class="scan-frame" id="scan-frame" hidden><video id="scan-video" playsinline muted></video><div class="scan-guide"></div></div>
+    <div class="scan-actions"><button type="button" class="archive-button" id="start-camera">Scan ISBN</button><button type="button" id="stop-camera" class="archive-secondary" hidden>Stop</button></div>
+    <label class="archive-upload">Cover OCR<input id="cover-file" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"></label>
+    <p class="field-note">Foto diproses di perangkat, tidak diunggah. Pilih satu sampul dengan tulisan yang jelas.</p>
+    <label class="scan-field">Search title / author<input id="lookup-query" type="search" maxlength="240" autocomplete="off" placeholder="Judul dan penulis"></label>
+    <label class="scan-field">ISBN<input id="lookup-isbn" type="text" inputmode="numeric" maxlength="32" placeholder="978…"></label>
+    <button type="button" class="archive-secondary" id="lookup-button">Find metadata</button>
+    <p id="scan-status" role="status" aria-live="polite"></p>
+    <div id="scan-results" aria-label="Hasil pencarian"></div>
+  </section>
+  <section class="scan-panel" aria-labelledby="review-title">
+    <h2 id="review-title">02 / Review copy</h2>
+    <form id="copy-form">
+      <div class="scan-fields">
+      {% for name,label,maxlen in [('title','Judul',300),('author','Penulis',200),('isbn','ISBN',32),('publisher','Penerbit',200),('language','Bahasa',40),('translator','Penerjemah',200),('edition','Edisi',100),('printing','Cetakan',100),('shelf','Lokasi rak',100),('tags','Tags / tema (pisahkan koma)',500)] %}
+      <label class="scan-field {% if name in ('title','author','tags') %}wide{% endif %}">{{ label }}<input name="{{ name }}" maxlength="{{ maxlen }}" value="{{ book.get(name,'') or '' }}" {% if name in ('title','author') %}required{% endif %}></label>
+      {% endfor %}
+      <label class="scan-field">Tahun edisi<input name="year" type="number" min="1" max="9999" value="{{ book.get('year') or '' }}"></label>
+      <label class="scan-field">Halaman<input name="pages" type="number" min="1" max="100000" value="{{ book.get('pages') or '' }}"></label>
+      {% for name,label,options,default in [('genre','Genre',genres,'Unclassified'),('format','Sampul',formats,'unknown'),('status','Status membaca',statuses,'unread')] %}
+      <label class="scan-field">{{ label }}<select name="{{ name }}">{% for option in options %}<option value="{{ option }}" {% if book.get(name,default)==option %}selected{% endif %}>{{ option|capitalize }}</option>{% endfor %}</select></label>
+      {% endfor %}
+      <label class="scan-field wide">Catatan<textarea name="notes" maxlength="2000" rows="3">{{ book.get('notes','') }}</textarea></label>
+      </div>
+      <div class="scan-actions"><button id="save-copy" class="archive-button" type="submit">Save to collection</button>{% if not copy_id %}<button id="save-next" class="archive-secondary" type="button">Save & scan next</button>{% else %}<button id="delete-copy" class="archive-danger" type="button">Delete copy</button>{% endif %}</div>
+      <p id="save-status" role="status" aria-live="polite"></p>
+      <a href="{{ url_for('library.index') }}" class="archive-link">Back to collection</a>
+    </form>
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}<script defer src="{{ url_for('static', filename='js/scanner.js') }}"></script>{% endblock %}

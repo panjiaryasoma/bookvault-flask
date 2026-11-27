@@ -33,11 +33,13 @@
         <nav class="sidebar-nav" aria-label="Bagian personal library">
             <a href="#overview" class="active">Overview</a>
             <a href="#insights">Insights</a>
-            <a href="#collection">Collection</a>
+            <a href="{{ url_for('library.index') }}">Physical Collection</a>
+            <a href="#collection">Favorites</a>
         </nav>
 
         <div class="sidebar-actions">
             <span class="sidebar-label">Quick actions</span>
+            <a href="{{ url_for('library.scan') }}">Scan a book</a>
             <a href="/">Browse catalog</a>
             <a href="/public-books">Explore public books</a>
         </div>
@@ -50,10 +52,10 @@
             <div>
                 <span class="eyebrow">My Library</span>
                 <h1 id="library-title">Personal Library</h1>
-                <p>Koleksi pribadi <strong>{{ username }}</strong>. Cari kembali buku yang disimpan, lihat pola koleksi, dan kelola favorit dari satu tempat.</p>
+                <p>Daftar favorit <strong>{{ username }}</strong>. Buku fisik yang dimiliki tersedia di Physical Collection.</p>
             </div>
 
-            <a href="/" class="primary-action">Jelajahi Katalog</a>
+            <a href="{{ url_for('library.index') }}" class="primary-action">Physical Collection</a>
         </section>
 
         <section class="library-stats" aria-label="Ringkasan koleksi">

@@ -34,3 +34,6 @@ Thumbs.db
 app_fixed.py
 app_old.py
 app(*
+node_modules/
+static/vendor/
+.pytest_cache/

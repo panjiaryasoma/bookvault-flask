@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Physical Collection - BookVault{% endblock %}
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/user_dashboard.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/library.css') }}">
+{% endblock %}
+{% block main_class %}user-page{% endblock %}
+{% block header %}
+<header class="user-topbar">
+  <a href="{{ url_for('library.index') }}" class="user-brand">BookVault <span>Library</span></a>
+  <nav class="user-topnav" aria-label="Navigasi"><a href="/">Katalog</a><a href="/user/dashboard">Favorites</a><a href="/logout">Logout</a></nav>
+</header>
+{% endblock %}
+{% block content %}
+<div class="user-shell">
+  <aside class="user-sidebar">
+    <div class="sidebar-account"><span class="sidebar-label">Personal Archive</span><strong>{{ session.user_username }}</strong></div>
+    <nav class="sidebar-nav"><a href="{{ url_for('library.index') }}" class="active">Physical Collection</a><a href="{{ url_for('library.scan') }}">Scan a book</a><a href="/user/dashboard">Favorites</a></nav>
+    <div class="sidebar-actions"><span class="sidebar-label">Export</span><a href="{{ url_for('library.export', format='csv') }}">CSV</a><a href="{{ url_for('library.export') }}">JSON</a></div>
+  </aside>
+  <div class="user-content">
+    <section class="library-intro">
+      <div><span class="eyebrow">Personal Archive</span><h1>Physical Collection</h1><p>Catat karya, edisi, dan setiap eksemplar yang benar-benar kamu miliki.</p></div>
+      <a href="{{ url_for('library.scan') }}" class="primary-action">+ Scan a book</a>
+    </section>
+    <section class="library-stats">
+      <article class="library-stat"><span class="stat-label">Copies</span><strong>{{ total }}</strong><small>eksemplar fisik</small></article>
+      <article class="library-stat"><span class="stat-label">Works</span><strong>{{ titles }}</strong><small>karya berbeda</small></article>
+      <article class="library-stat"><span class="stat-label">Finished</span><strong>{{ finished }}</strong><small>selesai dibaca</small></article>
+    </section>
+    <section class="library-ledger">
+      <div class="section-heading section-heading--ruled"><h2>The collection</h2><span class="section-note">{{ pagination.total }} hasil</span></div>
+      <form method="GET" class="library-filter">
+        <label>Search<input type="search" name="q" value="{{ request.args.get('q','') }}" placeholder="Judul, penulis, ISBN, tag" maxlength="200"></label>
+        <label>Genre<select name="genre"><option value="">Semua genre</option>{% for g in genres %}<option {% if request.args.get('genre') == g %}selected{% endif %}>{{ g }}</option>{% endfor %}</select></label>
+        <label>Status<select name="status"><option value="">Semua status</option>{% for s in statuses %}<option value="{{ s }}" {% if request.args.get('status') == s %}selected{% endif %}>{{ s|capitalize }}</option>{% endfor %}</select></label>
+        <button class="archive-button">Filter</button>
+        <a href="{{ url_for('library.index') }}">Reset</a>
+      </form>
+      {% for c in copies %}
+      <article class="copy-row">
+        <div class="archive-cover" aria-hidden="true"><span>{{ c.author[:24] }}</span><strong>{{ c.title[:42] }}</strong></div>
+        <div class="copy-main"><h3><a href="{{ url_for('library.edit',copy_id=c.id) }}">{{ c.title }}</a></h3><p>{{ c.author }}</p><small>{{ c.publisher or 'Penerbit belum dicatat' }}{% if c.year %} · {{ c.year }}{% endif %}{% if c.printing %} · {{ c.printing }}{% endif %}</small>{% if c.tags %}<p class="copy-tags">{{ c.tags }}</p>{% endif %}</div>
+        <div class="copy-meta"><span>{{ c.genre }}</span><small>{{ c.status|capitalize }} · {{ c.format|capitalize }}</small>{% if c.shelf %}<small>Rak: {{ c.shelf }}</small>{% endif %}</div>
+        <a class="archive-link" href="{{ url_for('library.edit',copy_id=c.id) }}">Edit</a>
+      </article>
+      {% else %}<p class="archive-empty">Belum ada buku yang cocok. Pindai buku pertama atau ubah filter.</p>{% endfor %}
+      <nav class="archive-pagination" aria-label="Halaman">
+        {% if pagination.has_prev %}<a href="{{ url_for('library.index',page=pagination.prev_num,q=request.args.get('q',''),genre=request.args.get('genre',''),status=request.args.get('status','')) }}">← Prev</a>{% endif %}
+        <span>{{ pagination.page }} / {{ pagination.pages or 1 }}</span>
+        {% if pagination.has_next %}<a href="{{ url_for('library.index',page=pagination.next_num,q=request.args.get('q',''),genre=request.args.get('genre',''),status=request.args.get('status','')) }}">Next →</a>{% endif %}
+      </nav>
+    </section>
+  </div>
+</div>
+{% endblock %}

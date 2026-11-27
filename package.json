@@ -1,0 +1,15 @@
+{
+  "name": "bookvault-scanner-assets",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/vendor.mjs"
+  },
+  "dependencies": {
+    "@zxing/browser": "0.1.5",
+    "@zxing/library": "0.21.3",
+    "tesseract.js": "6.0.1",
+    "tesseract.js-core": "6.0.0",
+    "@tesseract.js-data/eng": "1.0.0",
+    "@tesseract.js-data/ind": "1.0.0"
+  }
+}
