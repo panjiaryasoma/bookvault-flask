@@ -130,7 +130,7 @@ def test_metadata_exact_match_and_fallback():
 
 def test_provider_failure_and_rate_limit():
     a=client("alice")
-    with patch("app.time.time",return_value=1800000000), patch("library.lookup_metadata",return_value=[]) as mock:
+    with patch("app.time.time",return_value=__import__("time").time()), patch("library.lookup_metadata",return_value=[]) as mock:
         for _ in range(30):
             assert a.post("/library/lookup",json={"query":"Title"},headers=h()).status_code==200
         assert a.post("/library/lookup",json={"query":"Title"},headers=h()).status_code==429
