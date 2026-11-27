@@ -34,6 +34,9 @@
         <label>Search<input type="search" name="q" value="{{ request.args.get('q','') }}" placeholder="Judul, penulis, ISBN, tag" maxlength="200"></label>
         <label>Genre<select name="genre"><option value="">Semua genre</option>{% for g in genres %}<option {% if request.args.get('genre') == g %}selected{% endif %}>{{ g }}</option>{% endfor %}</select></label>
         <label>Status<select name="status"><option value="">Semua status</option>{% for s in statuses %}<option value="{{ s }}" {% if request.args.get('status') == s %}selected{% endif %}>{{ s|capitalize }}</option>{% endfor %}</select></label>
+        {% for name,label,options in [('kind','Type',kinds),('work_form','Work form',work_forms),('format','Binding',formats)] %}
+        <label>{{ label }}<select name="{{ name }}"><option value="">Semua</option>{% for option in options %}<option value="{{ option }}" {% if request.args.get(name)==option %}selected{% endif %}>{{ option|replace('_',' ')|capitalize }}</option>{% endfor %}</select></label>
+        {% endfor %}
         <button class="archive-button">Filter</button>
         <a href="{{ url_for('library.index') }}">Reset</a>
       </form>
@@ -41,14 +44,14 @@
       <article class="copy-row">
         <div class="archive-cover" aria-hidden="true"><span>{{ c.author[:24] }}</span><strong>{{ c.title[:42] }}</strong></div>
         <div class="copy-main"><h3><a href="{{ url_for('library.edit',copy_id=c.id) }}">{{ c.title }}</a></h3><p>{{ c.author }}</p><small>{{ c.publisher or 'Penerbit belum dicatat' }}{% if c.year %} · {{ c.year }}{% endif %}{% if c.printing %} · {{ c.printing }}{% endif %}</small>{% if c.tags %}<p class="copy-tags">{{ c.tags }}</p>{% endif %}</div>
-        <div class="copy-meta"><span>{{ c.genre }}</span><small>{{ c.status|capitalize }} · {{ c.format|capitalize }}</small>{% if c.shelf %}<small>Rak: {{ c.shelf }}</small>{% endif %}</div>
+        <div class="copy-meta"><span>{{ c.genre }}</span><small>{{ c.status|capitalize }} · {{ c.format|capitalize }}{% if c.kind!="unknown" %} · {{ c.kind|capitalize }}{% endif %}{% if c.work_form!="unknown" %} · {{ c.work_form|replace("_"," ")|capitalize }}{% endif %}</small>{% if c.shelf %}<small>Rak: {{ c.shelf }}</small>{% endif %}</div>
         <a class="archive-link" href="{{ url_for('library.edit',copy_id=c.id) }}">Edit</a>
       </article>
       {% else %}<p class="archive-empty">Belum ada buku yang cocok. Pindai buku pertama atau ubah filter.</p>{% endfor %}
       <nav class="archive-pagination" aria-label="Halaman">
-        {% if pagination.has_prev %}<a href="{{ url_for('library.index',page=pagination.prev_num,q=request.args.get('q',''),genre=request.args.get('genre',''),status=request.args.get('status','')) }}">← Prev</a>{% endif %}
+        {% if pagination.has_prev %}<a href="{{ url_for('library.index',page=pagination.prev_num,q=request.args.get('q',''),genre=request.args.get('genre',''),status=request.args.get('status',''),kind=request.args.get('kind',''),work_form=request.args.get('work_form',''),format=request.args.get('format','')) }}">← Prev</a>{% endif %}
         <span>{{ pagination.page }} / {{ pagination.pages or 1 }}</span>
-        {% if pagination.has_next %}<a href="{{ url_for('library.index',page=pagination.next_num,q=request.args.get('q',''),genre=request.args.get('genre',''),status=request.args.get('status','')) }}">Next →</a>{% endif %}
+        {% if pagination.has_next %}<a href="{{ url_for('library.index',page=pagination.next_num,q=request.args.get('q',''),genre=request.args.get('genre',''),status=request.args.get('status',''),kind=request.args.get('kind',''),work_form=request.args.get('work_form',''),format=request.args.get('format','')) }}">Next →</a>{% endif %}
       </nav>
     </section>
   </div>

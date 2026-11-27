@@ -26,8 +26,8 @@
       {% endfor %}
       <label class="scan-field">Tahun edisi<input name="year" type="number" min="1" max="9999" value="{{ book.get('year') or '' }}"></label>
       <label class="scan-field">Halaman<input name="pages" type="number" min="1" max="100000" value="{{ book.get('pages') or '' }}"></label>
-      {% for name,label,options,default in [('genre','Genre',genres,'Unclassified'),('format','Sampul',formats,'unknown'),('status','Status membaca',statuses,'unread')] %}
-      <label class="scan-field">{{ label }}<select name="{{ name }}">{% for option in options %}<option value="{{ option }}" {% if book.get(name,default)==option %}selected{% endif %}>{{ option|capitalize }}</option>{% endfor %}</select></label>
+      {% for name,label,options,default in [('genre','Genre',genres,'Unclassified'),('kind','Tipe karya',kinds,'unknown'),('work_form','Bentuk karya',work_forms,'unknown'),('format','Sampul',formats,'unknown'),('status','Status membaca',statuses,'unread')] %}
+      <label class="scan-field">{{ label }}<select name="{{ name }}">{% for option in options %}<option value="{{ option }}" {% if book.get(name,default)==option %}selected{% endif %}>{{ option|replace("_"," ")|capitalize }}</option>{% endfor %}</select></label>
       {% endfor %}
       <label class="scan-field wide">Catatan<textarea name="notes" maxlength="2000" rows="3">{{ book.get('notes','') }}</textarea></label>
       </div>

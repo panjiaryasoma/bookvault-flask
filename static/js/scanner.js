@@ -28,8 +28,8 @@
         return {response,data};
     }
     function apply(result) {
-        for (const k of ["title","author","isbn","publisher","language","year","pages","genre"]) {
-            form.elements[k].value=result[k]??"";
+        for (const k of ["title","author","isbn","publisher","language","year","pages","genre","kind","work_form","tags"]) {
+            form.elements[k].value=result[k]??(["kind","work_form"].includes(k)?"unknown":k==="genre"?"Unclassified":"");
         }
         saveStatus.textContent="Periksa kecocokan edisi dan metadata sebelum menyimpan.";
     }
@@ -104,7 +104,7 @@
         finally{if(bitmap)bitmap.close();ocrBusy=false;event.target.disabled=false;event.target.value="";}
     });
     async function save(next) {
-        if(busy||!form.reportValidity())return;
+        if(busy||ocrBusy||!form.reportValidity()){if(ocrBusy)saveStatus.textContent="Selesaikan OCR sebelum menyimpan.";return;}
         busy=true;$("save-copy").disabled=true;if($("save-next"))$("save-next").disabled=true;saveStatus.textContent="Menyimpan…";
         const data=Object.fromEntries(new FormData(form));data.token=token;
         const path=editId?"/library/copies/"+encodeURIComponent(editId):"/library/copies";
@@ -125,5 +125,5 @@
         try{const {response}=await api("/library/copies/"+encodeURIComponent(editId),"DELETE");if(!response.ok)throw Error("Gagal menghapus.");location.assign("/library/");}
         catch(error){saveStatus.textContent=error.message;busy=false;}
     });
-    window.addEventListener("pagehide",()=>{stopCamera();if(worker)worker.terminate().catch(()=>{});});
+    window.addEventListener("pagehide",()=>{stopCamera();if(worker){worker.terminate().catch(()=>{});worker=null;}});
 })();

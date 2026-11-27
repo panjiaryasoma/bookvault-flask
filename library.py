@@ -16,6 +16,8 @@ from sqlalchemy.exc import IntegrityError
 
 GENRES = ("Literary Fiction", "Historical Fiction", "Political Fiction", "Mystery", "Fantasy", "Science Fiction", "Romance", "Philosophy", "Theology", "History", "Politics", "Science", "Biography", "Technology", "Other", "Unclassified")
 STATUS = ("unread", "reading", "finished", "abandoned")
+KINDS = ("fiction", "nonfiction", "mixed", "unknown")
+WORK_FORMS = ("novel", "short_story", "poetry", "drama", "essay", "memoir", "reference", "other", "unknown")
 FORMATS = ("hardcover", "paperback", "other", "unknown")
 FIELDS = {"title": 300, "author": 200, "publisher": 200, "language": 40, "translator": 200, "printing": 100, "edition": 100, "genre": 80, "tags": 500, "shelf": 100, "notes": 2000}
 ISBN_RE = re.compile(r"^[0-9]{9}[0-9X]$|^[0-9]{13}$")
@@ -72,7 +74,9 @@ def validate(data):
         raise ValueError("Genre tidak valid.")
     result["format"] = data.get("format", "unknown")
     result["status"] = data.get("status", "unread")
-    if result["format"] not in FORMATS or result["status"] not in STATUS:
+    result["kind"] = data.get("kind","unknown")
+    result["work_form"] = data.get("work_form","unknown")
+    if result["format"] not in FORMATS or result["status"] not in STATUS or result["kind"] not in KINDS or result["work_form"] not in WORK_FORMS:
         raise ValueError("Format atau status tidak valid.")
     result["tags"] = ", ".join(dict.fromkeys(t.strip() for t in result["tags"].split(",") if t.strip()))
     return result
@@ -82,14 +86,42 @@ def classify(subjects):
     for needles, genre in [
         (("historical fiction",), "Historical Fiction"), (("political fiction",), "Political Fiction"),
         (("science fiction",), "Science Fiction"), (("fantasy",), "Fantasy"), (("mystery", "detective"), "Mystery"),
-        (("literary fiction", "classics"), "Literary Fiction"), (("romance",), "Romance"),
+        (("literary fiction",), "Literary Fiction"), (("romance",), "Romance"),
         (("philosophy",), "Philosophy"), (("theology", "religion"), "Theology"),
         (("biography", "autobiography"), "Biography"), (("history",), "History"),
         (("politics",), "Politics"), (("computers", "technology"), "Technology"), (("science",), "Science"),
         (("fiction",), "Literary Fiction")]:
-        if any(n in text for n in needles):
+        if any(re.search(r"(?<!\w)"+re.escape(n)+r"(?!\w)",text) for n in needles):
             return genre
     return "Unclassified"
+
+def classify_dimensions(subjects):
+    genre=classify(subjects)
+    text=" ".join(str(s) for s in subjects[:30]).casefold()
+    def contains(*terms):
+        return any(re.search(r"(?<!\w)"+re.escape(term)+r"(?!\w)",text) for term in terms)
+    if contains("nonfiction","non-fiction","non fiction"):
+        kind="nonfiction"
+        if genre=="Literary Fiction": genre="Unclassified"
+    elif genre in {"Literary Fiction","Historical Fiction","Political Fiction","Mystery","Fantasy","Science Fiction","Romance"}:
+        kind="fiction"
+    elif genre in {"Philosophy","Theology","History","Politics","Science","Biography","Technology"}:
+        kind="nonfiction"
+    else:
+        kind="unknown"
+    work_form="unknown"
+    for terms,form in [(("novel","novels"),"novel"),(("short stories","short story"),"short_story"),(("poetry","poems"),"poetry"),(("drama","plays"),"drama"),(("essays","essay"),"essay"),(("memoir","memoirs","autobiography"),"memoir"),(("encyclopedia","dictionary","reference"),"reference")]:
+        if contains(*terms):
+            work_form=form
+            break
+    tags=[]
+    for s in subjects[:8]:
+        try:
+            tag=clean(str(s).replace(","," "),60)
+            if tag and tag not in tags: tags.append(tag)
+        except ValueError:
+            pass
+    return {"genre":genre,"kind":kind,"work_form":work_form,"tags":", ".join(tags)[:500]}
 
 def lookup_metadata(query, isbn=None):
     # Fixed provider hosts, no user-controlled URLs or redirects.
@@ -118,7 +150,7 @@ def lookup_metadata(query, isbn=None):
         # Never attach an arbitrary ISBN to a title-only match.
         if isbn and isbn not in valid_ids:
             return
-        results.append({"title":title[:300], "author":str(author or "")[:200], "year":str(year or "")[:4] if str(year or "")[:4].isdigit() else "", "publisher":str(publisher or "")[:200], "language":str(language or "")[:40], "pages":pages if isinstance(pages,int) and 0<pages<=100000 else "", "isbn":isbn or "", "genre":classify(subjects), "source":source})
+        results.append({"title":title[:300], "author":str(author or "")[:200], "year":str(year or "")[:4] if str(year or "")[:4].isdigit() else "", "publisher":str(publisher or "")[:200], "language":str(language or "")[:40], "pages":pages if isinstance(pages,int) and 0<pages<=100000 else "", "isbn":isbn or "", **classify_dimensions(subjects), "source":source})
     try:
         if isbn:
             data=get("https://openlibrary.org/api/books", {"bibkeys":"ISBN:"+isbn,"format":"json","jscmd":"data"}).get("ISBN:"+isbn,{})
@@ -176,6 +208,8 @@ def register_library(app, db, User, throttle):
         request_hash = db.Column(db.String(64), nullable=False)
         printing = db.Column(db.String(100), nullable=False, default="")
         genre = db.Column(db.String(80), nullable=False)
+        kind = db.Column(db.String(20),nullable=False,default="unknown")
+        work_form = db.Column(db.String(30),nullable=False,default="unknown")
         tags = db.Column(db.String(500), nullable=False, default="")
         status = db.Column(db.String(20), nullable=False)
         shelf = db.Column(db.String(100), nullable=False, default="")
@@ -203,7 +237,7 @@ def register_library(app, db, User, throttle):
 
     def serialize(copy):
         e=copy.edition; w=e.work
-        return {"id":copy.id,"title":w.title,"author":w.author, **{k:getattr(e,k) for k in ("isbn","publisher","language","translator","edition","format","year","pages")}, **{k:getattr(copy,k) for k in ("printing","genre","tags","status","shelf","notes")}}
+        return {"id":copy.id,"title":w.title,"author":w.author, **{k:getattr(e,k) for k in ("isbn","publisher","language","translator","edition","format","year","pages")}, **{k:getattr(copy,k) for k in ("printing","genre","kind","work_form","tags","status","shelf","notes")}}
 
     def edition_for(uid,d):
         key=fingerprint(d["title"],d["author"])
@@ -228,6 +262,9 @@ def register_library(app, db, User, throttle):
             q=q.filter(db.or_(LibraryWork.title.icontains(term,autoescape=True),LibraryWork.author.icontains(term,autoescape=True),LibraryEdition.isbn.icontains(term,autoescape=True),LibraryCopy.tags.icontains(term,autoescape=True)))
         if genre in GENRES: q=q.filter(LibraryCopy.genre==genre)
         if status in STATUS: q=q.filter(LibraryCopy.status==status)
+        if request.args.get("kind") in KINDS: q=q.filter(LibraryCopy.kind==request.args["kind"])
+        if request.args.get("work_form") in WORK_FORMS: q=q.filter(LibraryCopy.work_form==request.args["work_form"])
+        if request.args.get("format") in FORMATS: q=q.filter(LibraryEdition.format==request.args["format"])
         return q.order_by(LibraryCopy.created_at.desc(),LibraryCopy.id)
 
     @bp.get("/")
@@ -235,18 +272,18 @@ def register_library(app, db, User, throttle):
         if not session.get("user_logged_in"): return redirect("/login")
         uid=owner()
         page=filtered(uid).paginate(page=max(1,request.args.get("page",1,type=int)),per_page=20,error_out=False)
-        return render_template("library.html", copies=[serialize(c) for c in page.items], pagination=page, genres=GENRES, statuses=STATUS, total=owned(uid).count(), finished=owned(uid).filter(LibraryCopy.status=="finished").count(), titles=owned(uid).with_entities(func.count(func.distinct(LibraryWork.id))).scalar())
+        return render_template("library.html", copies=[serialize(c) for c in page.items], pagination=page, genres=GENRES, statuses=STATUS, kinds=KINDS, work_forms=WORK_FORMS, formats=FORMATS, total=owned(uid).count(), finished=owned(uid).filter(LibraryCopy.status=="finished").count(), titles=owned(uid).with_entities(func.count(func.distinct(LibraryWork.id))).scalar())
 
     @bp.get("/scan")
     def scan():
         if not session.get("user_logged_in"): return redirect("/login")
         owner()
-        return render_template("scanner.html",genres=GENRES,statuses=STATUS,formats=FORMATS,book={},copy_id="",token=str(uuid.uuid4()))
+        return render_template("scanner.html",genres=GENRES,statuses=STATUS,formats=FORMATS,kinds=KINDS,work_forms=WORK_FORMS,book={},copy_id="",token=str(uuid.uuid4()))
 
     @bp.get("/copies/<copy_id>/edit")
     def edit(copy_id):
         c=get_copy(owner(),copy_id)
-        return render_template("scanner.html",genres=GENRES,statuses=STATUS,formats=FORMATS,book=serialize(c),copy_id=c.id,token=c.id)
+        return render_template("scanner.html",genres=GENRES,statuses=STATUS,formats=FORMATS,kinds=KINDS,work_forms=WORK_FORMS,book=serialize(c),copy_id=c.id,token=c.id)
 
     @bp.post("/lookup")
     def lookup():
@@ -284,7 +321,7 @@ def register_library(app, db, User, throttle):
         try:
             e=edition_for(uid,d)
             cid=str(uuid.uuid4())
-            c=LibraryCopy(id=cid,user_id=uid,edition_id=e.id,request_token=token,request_hash=request_hash,**{k:d[k] for k in ("printing","genre","tags","status","shelf","notes")})
+            c=LibraryCopy(id=cid,user_id=uid,edition_id=e.id,request_token=token,request_hash=request_hash,**{k:d[k] for k in ("printing","genre","kind","work_form","tags","status","shelf","notes")})
             db.session.add(c); db.session.commit()
         except IntegrityError:
             db.session.rollback()
@@ -303,7 +340,7 @@ def register_library(app, db, User, throttle):
         except (ValueError,TypeError): return jsonify(error="Metadata tidak valid."),400
         try:
             c.edition_id=edition_for(uid,d).id
-            for k in ("printing","genre","tags","status","shelf","notes"): setattr(c,k,d[k])
+            for k in ("printing","genre","kind","work_form","tags","status","shelf","notes"): setattr(c,k,d[k])
             db.session.commit()
         except IntegrityError:
             db.session.rollback(); return jsonify(error="Konflik data. Coba lagi."),409
@@ -321,7 +358,7 @@ def register_library(app, db, User, throttle):
         if request.args.get("format")!="csv":
             response=jsonify(rows); response.headers["Content-Disposition"]='attachment; filename="bookvault.json"'; return response
         buf=io.StringIO()
-        fields=["id","title","author","isbn","publisher","language","translator","edition","format","year","pages","printing","genre","tags","status","shelf","notes"]
+        fields=["id","title","author","isbn","publisher","language","translator","edition","format","year","pages","printing","genre","kind","work_form","tags","status","shelf","notes"]
         writer=csv.DictWriter(buf,fieldnames=fields); writer.writeheader()
         def safe(v):
             if isinstance(v,str) and (v.startswith(("\t","\r","\n")) or v.lstrip().startswith(("=","+","-","@"))): return "'"+v

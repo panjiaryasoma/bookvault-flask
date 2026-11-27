@@ -7,6 +7,13 @@ os.environ.setdefault("DATABASE_URL","sqlite://")
 os.environ.setdefault("BOOKVAULT_SECRET_KEY","test-secret-"+("a"*48))
 os.environ.setdefault("BOOKVAULT_API_KEY","test-api-"+("b"*48))
 os.environ.setdefault("BOOKVAULT_HTTPS","0")
+from sqlalchemy.engine import make_url
+test_url=make_url(os.environ["DATABASE_URL"])
+if test_url.get_backend_name()=="sqlite":
+    if test_url.database not in (None,"",":memory:"):
+        raise RuntimeError("Refusing destructive tests against a persistent SQLite database")
+elif not (test_url.get_backend_name()=="postgresql" and test_url.host in ("localhost","127.0.0.1") and os.getenv("BOOKVAULT_ALLOW_TEST_RESET")=="1" and os.getenv("BOOKVAULT_DB_SCHEMA")=="bookvault_private"):
+    raise RuntimeError("Refusing destructive tests outside the isolated CI database")
 from app import app, db, User, Book, Favorite, RateWindow
 from library import isbn13, lookup_metadata
 
@@ -235,3 +242,17 @@ def test_postgres_schema_not_accessible_to_anon():
         with app.app_context():
             assert db.session.execute(text("SELECT has_schema_privilege('anon', :s, 'USAGE')"),{"s":db_schema}).scalar() is False
             assert db.session.execute(text("SELECT has_table_privilege('anon', :t, 'SELECT')"),{"t":db_schema+".library_copy"}).scalar() is False
+
+def test_classification_dimensions_and_filters():
+    from library import classify_dimensions
+    assert classify_dimensions(["Nonfiction"])["kind"]=="nonfiction"
+    assert classify_dimensions(["Science fiction","Novels"])["genre"]=="Science Fiction"
+    assert classify_dimensions(["Science fiction","Novels"])["work_form"]=="novel"
+    a=client("alice")
+    make(a,kind="fiction",work_form="novel")
+    assert b"Laut Bercerita" in a.get("/library/?kind=fiction&work_form=novel&format=paperback").data
+    assert b"Laut Bercerita" not in a.get("/library/?kind=nonfiction").data
+    assert b"Laut Bercerita" not in a.get("/library/?format=hardcover").data
+    assert a.get("/library/export").json[0]["work_form"]=="novel"
+    d=payload();d["kind"]="invalid"
+    assert a.post("/library/copies",json=d,headers=h()).status_code==400
