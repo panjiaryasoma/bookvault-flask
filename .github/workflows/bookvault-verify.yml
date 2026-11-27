@@ -49,15 +49,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install --ignore-scripts
+      - run: npm ci --ignore-scripts
       - run: npm run build
-      - name: Export resolved dependency lock for review
-        run: node -e "console.log('LOCKFILE_BEGIN'+require('fs').readFileSync('package-lock.json').toString('base64')+'LOCKFILE_END')"
       - run: node --check static/js/scanner.js && node --check static/js/csrf.js
       - run: npm audit --audit-level=high
 
   chromium-e2e:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
@@ -68,7 +66,7 @@ jobs:
         with:
           node-version: '22'
       - run: python -m pip install -r requirements.txt playwright==1.55.0
-      - run: npm install --ignore-scripts && npm run build
+      - run: npm ci --ignore-scripts && npm run build
       - run: python -m playwright install --with-deps chromium
       - run: python tests/browser_e2e.py
       - uses: actions/upload-artifact@v4
