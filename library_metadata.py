@@ -40,7 +40,7 @@ def safe_cover(value):
 
 RULES = {
     "Fiksi": ["fiction","novel","literary fiction","fiksi"],
-    "Nonfiksi": ["nonfiction","non-fiction","nonfiksi"],
+    "Nonfiksi": ["nonfiction","non-fiction","non fiction","nonfiksi"],
     "Fiksi sejarah": ["historical fiction","fiksi sejarah"],
     "Fiksi politik": ["political fiction","fiksi politik"],
     "Filsafat": ["philosophy","filsafat"],
@@ -57,7 +57,8 @@ RULES = {
 }
 def classify(subjects):
     s = normalized(" | ".join(values(subjects)))
-    return [name for name, words in RULES.items() if any(re.search(r"(?<!\w)"+re.escape(word)+r"(?!\w)",s) for word in words)]
+    fiction_text = re.sub(r"\bnon[- ]?fiction\b|\bnonfiksi\b", "", s)
+    return [name for name, words in RULES.items() if any(re.search(r"(?<!\w)"+re.escape(word)+r"(?!\w)",fiction_text if name=="Fiksi" else s) for word in words)]
 
 def get_json(url, params):
     # No arbitrary URLs, redirects, or unbounded responses.

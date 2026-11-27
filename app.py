@@ -55,8 +55,6 @@ def protect_session_writes():
     if request.method not in {"POST", "PUT", "PATCH", "DELETE"}:
         return None
     if request.endpoint in {"create_book", "update_book", "delete_book"}:
-        if not isinstance(request.get_json(silent=True), dict) and request.method != "DELETE":
-            return jsonify(error="Expected a JSON object"), 400
         return None
     expected = session.get("_csrf", "")
     supplied = request.headers.get("X-CSRF-Token") or request.form.get("_csrf", "")
@@ -69,7 +67,9 @@ def security_headers(response):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Permissions-Policy"] = "camera=(self), microphone=(), geolocation=()"
-    if request.path.startswith(("/user", "/api/library", "/admin", "/login", "/register")) or session.get("user_logged_in") or session.get("admin_logged_in"):
+    if app.config["SESSION_COOKIE_SECURE"]:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000"
+    if response.mimetype == "text/html" or request.path.startswith(("/user", "/api/library", "/admin", "/login", "/register")) or session.get("user_logged_in") or session.get("admin_logged_in"):
         response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -77,7 +77,7 @@ def safe_back(default):
     try:
         ref = urlsplit(request.referrer or "")
         origin = urlsplit(request.host_url)
-        if (ref.scheme, ref.netloc) == (origin.scheme, origin.netloc) and ref.path.startswith("/") and not ref.path.startswith("//") and "\\" not in ref.path:
+        if (ref.scheme, ref.netloc) == (origin.scheme, origin.netloc) and ref.path in {"/", "/public-books", "/user/dashboard", "/admin"} and len(ref.query) <= 1024:
             return ref.path + (("?" + ref.query) if ref.query else "")
     except ValueError:
         pass
@@ -413,7 +413,7 @@ def get_book(book_id):
 def create_book():
     data = request.get_json(silent=True)
 
-    if not data:
+    if not isinstance(data, dict) or not data:
         return jsonify({"error": "Invalid JSON body"}), 400
 
     title = str(data.get("title", "")).strip()
@@ -423,6 +423,9 @@ def create_book():
     rating_raw = str(data.get("rating", 0)).strip()
     description = str(data.get("description", "")).strip()
     cover_image = str(data.get("cover_image", "")).strip()
+
+    if len(title) > 150 or len(author) > 100 or len(genre) > 80 or len(cover_image) > 255 or len(description) > 10000:
+        return jsonify(error="Field too long"), 400
 
     missing = []
     if not title:
@@ -470,8 +473,8 @@ def create_book():
         }), 400
 
     existing_book = Book.query.filter(
-        Book.title.ilike(title),
-        Book.author.ilike(author)
+        func.lower(Book.title) == title.lower(),
+        func.lower(Book.author) == author.lower()
     ).first()
 
     if existing_book:
@@ -508,7 +511,7 @@ def update_book(book_id):
         return jsonify({"error": "Book not found"}), 404
 
     data = request.get_json(silent=True)
-    if not data:
+    if not isinstance(data, dict) or not data:
         return jsonify({"error": "Invalid JSON body"}), 400
 
     new_title = str(data.get("title", book.title)).strip()
@@ -516,6 +519,9 @@ def update_book(book_id):
     new_genre = str(data.get("genre", book.genre)).strip()
     new_description = str(data.get("description", book.description or "")).strip()
     new_cover_image = str(data.get("cover_image", book.cover_image or "")).strip()
+
+    if len(new_title) > 150 or len(new_author) > 100 or len(new_genre) > 80 or len(new_cover_image) > 255 or len(new_description) > 10000:
+        return jsonify(error="Field too long"), 400
 
     missing = []
     if not new_title:
@@ -562,8 +568,8 @@ def update_book(book_id):
 
     existing_book = Book.query.filter(
         Book.id != book.id,
-        Book.title.ilike(new_title),
-        Book.author.ilike(new_author)
+        func.lower(Book.title) == new_title.lower(),
+        func.lower(Book.author) == new_author.lower()
     ).first()
 
     if existing_book:
@@ -734,8 +740,10 @@ def admin_login():
     return render_template("admin_login.html", error=None)
 
 
-@app.route("/admin/logout", methods=["POST"])
+@app.route("/admin/logout", methods=["GET", "POST"])
 def admin_logout():
+    if request.method == "GET":
+        return render_template("logout_confirm.html", target="/admin/logout")
     session.clear()
     set_alert("Logout admin berhasil.", "success")
     return redirect("/admin/login")
@@ -836,6 +844,8 @@ def _validate_admin_book_form(form):
     rating_raw = form.get("rating", "0").strip()
     description = form.get("description", "").strip()
 
+    if len(title) > 150 or len(author) > 100 or len(genre) > 80 or len(description) > 10000:
+        return None, "Field terlalu panjang."
     if not title or not author or not genre or not year_raw:
         return None, "Judul, penulis, genre, dan tahun wajib diisi."
 
@@ -882,8 +892,8 @@ def admin_add_book():
             )
 
         existing_book = Book.query.filter(
-            Book.title.ilike(data["title"]),
-            Book.author.ilike(data["author"])
+            func.lower(Book.title) == data["title"].lower(),
+            func.lower(Book.author) == data["author"].lower()
         ).first()
 
         if existing_book:
@@ -933,8 +943,8 @@ def admin_edit_book(book_id):
 
         existing_book = Book.query.filter(
             Book.id != book.id,
-            Book.title.ilike(data["title"]),
-            Book.author.ilike(data["author"])
+            func.lower(Book.title) == data["title"].lower(),
+            func.lower(Book.author) == data["author"].lower()
         ).first()
 
         if existing_book:
@@ -1043,6 +1053,9 @@ def admin_import_book():
     genre = request.form.get("genre", "").strip()
     source = request.form.get("source", "API publik").strip() or "API publik"
 
+    if len(title) > 150 or len(author) > 100 or len(genre) > 80 or len(cover_url) > 255 or len(source) > 100:
+        set_alert("Field terlalu panjang.", "error")
+        return redirect(safe_back("/public-books"))
     if not title:
         set_alert("Buku gagal disimpan karena judul tidak valid.", "error")
         return redirect(safe_back("/public-books"))
@@ -1069,8 +1082,8 @@ def admin_import_book():
         return redirect(safe_back("/public-books"))
 
     existing_book = Book.query.filter(
-        Book.title.ilike(title),
-        Book.author.ilike(author)
+        func.lower(Book.title) == title.lower(),
+        func.lower(Book.author) == author.lower()
     ).first()
 
     if existing_book:
@@ -1241,8 +1254,10 @@ def remove_favorite(book_id):
     return redirect(safe_back("/user/dashboard"))
 
 
-@app.route("/logout", methods=["POST"])
+@app.route("/logout", methods=["GET", "POST"])
 def user_logout():
+    if request.method == "GET":
+        return render_template("logout_confirm.html", target="/logout")
     session.clear()
     set_alert("Logout user berhasil.", "success")
     return redirect("/login")
@@ -1270,8 +1285,15 @@ def internal_server_error(e):
     return render_template("500.html"), 500
 
 
-from library_routes import register_library
+from library_routes import register_library, WindowLimit
 register_library(app, db, User, login_required)
+login_limit = WindowLimit(limit=15, seconds=300)
+
+@app.before_request
+def throttle_authentication():
+    if request.method == "POST" and request.endpoint in {"user_login", "admin_login", "register"}:
+        if not login_limit.allow(request.remote_addr or "unknown"):
+            abort(429)
 
 @app.cli.command("init-db")
 @click.option("--demo", is_flag=True, help="Seed coursework demo catalog, not personal books.")
@@ -1294,6 +1316,19 @@ def create_admin(username, password):
     db.session.add(user)
     db.session.commit()
     click.echo("Admin created.")
+
+@app.cli.command("reset-admin-password")
+@click.argument("username")
+@click.password_option()
+def reset_admin_password(username, password):
+    if not 12 <= len(password) <= 128:
+        raise click.ClickException("Password must be 12–128 characters")
+    user = User.query.filter_by(username=username, role="admin").first()
+    if not user:
+        raise click.ClickException("Admin not found")
+    user.set_password(password)
+    db.session.commit()
+    click.echo("Admin password reset.")
 
 if __name__ == "__main__":
     with app.app_context():

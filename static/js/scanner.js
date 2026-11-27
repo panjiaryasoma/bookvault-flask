@@ -62,9 +62,12 @@
     function fill(candidate){
         for(const key of ["title","author","isbn","publisher","year","language","pages","cover"]){
             const input=form.elements.namedItem(key);
-            if(input&&candidate[key])input.value=String(candidate[key]);
+            if(input)input.value=String(candidate[key]||"");
         }
         const tags=Array.isArray(candidate.tags)?candidate.tags:[];
+        form.elements.namedItem("tags").value="";
+        form.elements.namedItem("genre").value="";
+        form.elements.namedItem("kind").value="";
         if(tags.length){
             const input=form.elements.namedItem("tags");
             input.value=[...new Set([...input.value.split(",").map(x=>x.trim()).filter(Boolean),...tags])].join(", ").slice(0,600);
@@ -77,13 +80,14 @@
     async function search(){
         const q=query.value.trim();
         if(q.length<2||q.length>160){report("Masukkan 2–160 karakter.");return;}
-        lookupController?.abort();lookupController=new AbortController();
+        lookupController?.abort();const controller=new AbortController();lookupController=controller;
         const generation=++lookupGeneration;
         resultBox.replaceChildren();report("Mencari metadata…");
-        const timer=setTimeout(()=>lookupController?.abort(),25000);
+        const timer=setTimeout(()=>controller.abort(),25000);
         try{
-            const u=new URL(root.dataset.lookup,location.origin);u.searchParams.set("q",q);
-            const response=await fetch(u,{signal:lookupController.signal,credentials:"same-origin",headers:{Accept:"application/json"}});
+            const u=new URL(root.dataset.lookup,location.origin);
+            const csrf=document.querySelector('meta[name="csrf-token"]')?.content;
+            const response=await fetch(u,{method:"POST",body:JSON.stringify({q}),signal:controller.signal,credentials:"same-origin",headers:{Accept:"application/json","Content-Type":"application/json","X-CSRF-Token":csrf}});
             if(!response.ok||response.redirected)throw Error("Lookup failed");
             const data=await response.json();if(generation!==lookupGeneration)return;
             for(const candidate of data.results||[]){
@@ -103,6 +107,7 @@
     }
     ocr.addEventListener("click",async()=>{
         if(busy)return;const image=file.files?.[0];
+        if(typeof createImageBitmap!=="function"){report("Browser ini belum mendukung pemrosesan foto. Gunakan Chrome terbaru atau input manual.");return;}
         if(!image||!["image/jpeg","image/png","image/webp"].includes(image.type)||image.size>12*1024*1024){report("Pilih foto JPEG/PNG/WebP maksimal 12 MB.");return;}
         stopCamera();busy=true;ocr.disabled=true;const generation=++ocrGeneration;
         let bitmap;

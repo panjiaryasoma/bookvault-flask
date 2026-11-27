@@ -135,6 +135,8 @@ def register_library(app, db, User, login_required):
         if error:
             return render_template("library_scan.html",data=data,copy=copy,error=error,warning=warning,statuses=STATUS,kinds=KINDS),400
         work=LibraryWork.query.filter_by(user_id=user.id,title_key=normalized(data["title"]),author_key=normalized(data["author"])).first()
+        original_copy=copy
+        old_work=copy.edition.work if copy else None
         try:
             if work is None:
                 work=LibraryWork(user_id=user.id,title=data["title"],author=data["author"],title_key=normalized(data["title"]),author_key=normalized(data["author"]))
@@ -150,10 +152,13 @@ def register_library(app, db, User, login_required):
                 db.session.add(copy)
             for k in ("genre","kind","tags","status","condition","shelf","notes"):
                 setattr(copy,k,data[k])
+            db.session.flush()
+            if old_work and old_work.id != work.id and not LibraryEdition.query.filter_by(work_id=old_work.id).first():
+                db.session.delete(old_work)
             db.session.commit()
         except IntegrityError:
             db.session.rollback()
-            return render_template("library_scan.html",data=data,copy=None,error="Perubahan bersamaan terdeteksi. Coba lagi.",warning=False,statuses=STATUS,kinds=KINDS),409
+            return render_template("library_scan.html",data=data,copy=original_copy,error="Perubahan bersamaan terdeteksi. Coba lagi.",warning=False,statuses=STATUS,kinds=KINDS),409
         flash("Buku tersimpan.","success")
         return redirect(url_for("library.index"))
 
@@ -215,13 +220,16 @@ def register_library(app, db, User, login_required):
         flash("Eksemplar dihapus.","success")
         return redirect(url_for("library.index"))
 
-    @bp.get("/lookup")
+    @bp.post("/lookup")
     @login_required
     def metadata():
         user=owner()
         if not limit.allow(user.id):
             return jsonify(error="Too many lookup requests"),429
-        query=request.args.get("q","").strip()
+        payload=request.get_json(silent=True)
+        if not isinstance(payload,dict) or not isinstance(payload.get("q"),str):
+            return jsonify(error="Invalid query"),400
+        query=payload["q"].strip()
         if not 2<=len(query)<=160 or any(ord(c)<32 for c in query):
             return jsonify(error="Invalid query"),400
         compact=re.sub(r"[\s-]","",query)

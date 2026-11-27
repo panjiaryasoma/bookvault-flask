@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Logout - BookVault{% endblock %}
+{% block content %}
+<h1>Keluar dari BookVault?</h1>
+<form method="post" action="{{ target }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button type="submit">Logout</button></form>
+<a href="/">Batal</a>
+{% endblock %}
