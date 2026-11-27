@@ -4,10 +4,17 @@ import unittest
 from unittest.mock import patch
 os.environ["BOOKVAULT_SECRET_KEY"]="test-secret-only-"+"x"*40
 os.environ["BOOKVAULT_API_KEY"]="test-api-key"
-os.environ["DATABASE_URL"]=os.getenv("TEST_DATABASE_URL","sqlite://")
+from urllib.parse import urlsplit
+test_url=os.getenv("TEST_DATABASE_URL","sqlite://")
+if test_url!="sqlite://":
+    parsed=urlsplit(test_url)
+    if parsed.hostname not in {"localhost","127.0.0.1","::1"} or parsed.path!="/bookvault_test":
+        raise RuntimeError("Refusing destructive tests against a non-local disposable database")
+os.environ["DATABASE_URL"]=test_url
 os.environ["BOOKVAULT_SECURE_COOKIES"]="0"
 os.environ["BOOKVAULT_TRUSTED_HOSTS"]=""
-from app import app, db, User, Book, Favorite, login_limit
+from app import app, db, User, Book, Favorite, AuthSession, login_limit
+from datetime import datetime, timedelta
 from library_metadata import isbn13, classify, safe_cover, lookup
 from library_routes import WindowLimit
 
@@ -27,11 +34,9 @@ class LibraryTests(unittest.TestCase):
         self.bob=app.test_client()
         self.admin=app.test_client()
         for client,name in [(self.alice,"alice"),(self.bob,"bob"),(self.admin,"admin-test")]:
-            with client.session_transaction() as s:
-                if name=="admin-test":
-                    s.update(admin_logged_in=True,admin_username=name)
-                else:
-                    s.update(user_logged_in=True,user_username=name)
+            response=client.post("/login",data={"username":name,"password":"ValidPassword123!","_csrf":self.csrf(client)})
+            self.assertEqual(response.status_code,302)
+        login_limit.data.clear()
 
     def tearDown(self):
         with app.app_context():
@@ -127,6 +132,23 @@ class LibraryTests(unittest.TestCase):
         self.assertEqual(self.alice.post("/logout",data={"_csrf":self.csrf(self.alice)}).status_code,302)
         self.assertEqual(self.alice.get("/user/library").status_code,302)
 
+    def test_stolen_session_replay_after_logout(self):
+        captured=self.alice.get_cookie("session").value
+        self.assertEqual(self.alice.post("/logout",data={"_csrf":self.csrf(self.alice)}).status_code,302)
+        replay=app.test_client()
+        replay.set_cookie("session",captured)
+        self.assertEqual(replay.get("/user/library").status_code,302)
+
+    def test_expired_and_password_rotated_sessions(self):
+        with app.app_context():
+            user=User.query.filter_by(username="alice").first()
+            AuthSession.query.filter_by(user_id=user.id).update({"expires_at":datetime.utcnow()-timedelta(seconds=1)})
+            bob=User.query.filter_by(username="bob").first()
+            bob.set_password("DifferentPassword123!")
+            db.session.commit()
+        self.assertEqual(self.alice.get("/user/library").status_code,302)
+        self.assertEqual(self.bob.get("/user/library").status_code,302)
+
     def test_real_login_rotation_and_registration(self):
         c=app.test_client()
         token=self.csrf(c)
@@ -173,6 +195,10 @@ class LibraryTests(unittest.TestCase):
         res=self.alice.get("/user/library")
         self.assertEqual(res.headers["X-Frame-Options"],"DENY")
         self.assertEqual(res.headers["X-Content-Type-Options"],"nosniff")
+        csp=res.headers["Content-Security-Policy"]
+        self.assertIn("frame-ancestors \'none\'",csp)
+        self.assertIn("connect-src \'self\';",csp)
+        self.assertNotIn("script-src \'self\' \'unsafe-inline\'",csp)
         self.assertEqual(res.headers["Cache-Control"],"no-store")
         self.assertEqual(self.alice.post("/user/library/scan",data={"_csrf":self.csrf(self.alice),"notes":"x"*70000}).status_code,413)
 

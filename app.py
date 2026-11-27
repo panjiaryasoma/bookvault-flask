@@ -3,6 +3,12 @@ from urllib.parse import urlsplit
 import secrets
 import hmac
 import math
+import hashlib
+import sqlite3
+from datetime import timedelta
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
+from sqlalchemy.engine.url import make_url
 import click
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -28,18 +34,33 @@ elif database_url.startswith("postgresql://"):
 app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True}
 app.config["MAX_CONTENT_LENGTH"] = 64 * 1024
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=12)
+app.config["SESSION_REFRESH_EACH_REQUEST"] = False
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = os.getenv("BOOKVAULT_SECURE_COOKIES", "0") == "1"
 app.config["TRUSTED_HOSTS"] = [h.strip() for h in os.getenv("BOOKVAULT_TRUSTED_HOSTS", "").split(",") if h.strip()] or None
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = os.getenv("BOOKVAULT_SECRET_KEY")
-if not app.config["SECRET_KEY"] or len(app.config["SECRET_KEY"]) < 32:
+if not app.config["SECRET_KEY"] or len(app.config["SECRET_KEY"]) < 32 or app.config["SECRET_KEY"].startswith("replace-with-"):
     raise ValueError("BOOKVAULT_SECRET_KEY must be at least 32 characters")
 app.config["API_KEY"] = os.getenv("BOOKVAULT_API_KEY")
 
-if not app.config["API_KEY"]:
+if not app.config["API_KEY"] or app.config["API_KEY"].startswith("replace-with-"):
     raise ValueError("BOOKVAULT_API_KEY belum diatur di file .env")
+if app.config["SESSION_COOKIE_SECURE"]:
+    if len(app.config["API_KEY"]) < 32 or not app.config["TRUSTED_HOSTS"]:
+        raise ValueError("Production requires a strong API key and explicit trusted hosts")
+    parsed_url=make_url(database_url)
+    if parsed_url.get_backend_name()=="postgresql" and parsed_url.query.get("sslmode") not in {"require","verify-ca","verify-full"}:
+        raise ValueError("Production PostgreSQL requires TLS")
+
+@event.listens_for(Engine, "connect")
+def enforce_sqlite_foreign_keys(connection, _record):
+    if isinstance(connection, sqlite3.Connection):
+        cursor=connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
 db = SQLAlchemy(app)
 
@@ -69,6 +90,13 @@ def security_headers(response):
     response.headers["Permissions-Policy"] = "camera=(self), microphone=(), geolocation=()"
     if app.config["SESSION_COOKIE_SECURE"]:
         response.headers["Strict-Transport-Security"] = "max-age=31536000"
+    private = request.path.startswith(("/user/library", "/static/vendor"))
+    connect = "\'self\'" if private else "\'self\' https://openlibrary.org https://www.googleapis.com"
+    images = "\'self\' data: blob: https://covers.openlibrary.org https://books.google.com https://books.googleusercontent.com" if private else "\'self\' https: data: blob:"
+    response.headers["Content-Security-Policy"] = ("default-src \'self\'; script-src \'self\' \'wasm-unsafe-eval\'; "
+        "style-src \'self\' \'unsafe-inline\'; worker-src \'self\' blob:; "
+        f"connect-src {connect}; img-src {images}; "
+        "object-src \'none\'; base-uri \'none\'; frame-ancestors \'none\'; form-action \'self\'")
     if response.mimetype == "text/html" or request.path.startswith(("/user", "/api/library", "/admin", "/login", "/register")) or session.get("user_logged_in") or session.get("admin_logged_in"):
         response.headers["Cache-Control"] = "no-store"
     return response
@@ -157,6 +185,66 @@ class User(db.Model):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
+
+class AuthSession(db.Model):
+    __tablename__ = "auth_session"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash = db.Column(db.String(64), nullable=False, unique=True)
+    password_stamp = db.Column(db.String(64), nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False, index=True)
+
+def password_stamp(user):
+    return hmac.new(app.config["SECRET_KEY"].encode(), user.password_hash.encode(), hashlib.sha256).hexdigest()
+
+def token_hash(value):
+    return hashlib.sha256(value.encode()).hexdigest()
+
+def revoke_current_session():
+    value=session.get("_auth")
+    if isinstance(value,str) and value:
+        AuthSession.query.filter_by(token_hash=token_hash(value)).delete()
+        db.session.commit()
+
+def start_auth_session(user):
+    revoke_current_session()
+    now=datetime.utcnow()
+    AuthSession.query.filter(AuthSession.expires_at<=now).delete()
+    value=secrets.token_urlsafe(32)
+    db.session.add(AuthSession(user_id=user.id, token_hash=token_hash(value), password_stamp=password_stamp(user), expires_at=now+timedelta(hours=12)))
+    db.session.commit()
+    session.clear()
+    session.permanent=True
+    session["_auth"]=value
+    if user.role=="admin":
+        session["admin_logged_in"]=True
+        session["admin_username"]=user.username
+    else:
+        session["user_logged_in"]=True
+        session["user_username"]=user.username
+
+@app.before_request
+def validate_auth_session():
+    if request.endpoint=="static":
+        return
+    if not (session.get("user_logged_in") or session.get("admin_logged_in")):
+        return
+    value=session.get("_auth")
+    row=AuthSession.query.filter_by(token_hash=token_hash(value)).first() if isinstance(value,str) and value else None
+    user=db.session.get(User,row.user_id) if row else None
+    expected_role="admin" if session.get("admin_logged_in") else "user"
+    expected_name=session.get("admin_username") if expected_role=="admin" else session.get("user_username")
+    if (not row or not user or row.expires_at<=datetime.utcnow() or user.role!=expected_role
+        or user.username!=expected_name or not hmac.compare_digest(row.password_stamp,password_stamp(user))):
+        session.clear()
+
+DUMMY_PASSWORD_HASH=generate_password_hash(secrets.token_urlsafe(48))
+def verify_credentials(username,password):
+    if not username or len(username)>80 or not password or len(password)>128:
+        return None
+    user=User.query.filter_by(username=username).first()
+    valid=check_password_hash(user.password_hash if user else DUMMY_PASSWORD_HASH,password)
+    return user if user and valid else None
 
 class Book(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -725,12 +813,10 @@ def admin_login():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "").strip()
 
-        user = User.query.filter_by(username=username).first()
+        user = verify_credentials(username,password)
 
-        if user and user.check_password(password) and user.role == "admin":
-            session.clear()
-            session["admin_logged_in"] = True
-            session["admin_username"] = user.username
+        if user and user.role == "admin":
+            start_auth_session(user)
             set_alert("Login admin berhasil.", "success")
             return redirect("/admin")
 
@@ -744,6 +830,7 @@ def admin_login():
 def admin_logout():
     if request.method == "GET":
         return render_template("logout_confirm.html", target="/admin/logout")
+    revoke_current_session()
     session.clear()
     set_alert("Logout admin berhasil.", "success")
     return redirect("/admin/login")
@@ -1149,19 +1236,15 @@ def user_login():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "").strip()
 
-        user = User.query.filter_by(username=username).first()
+        user = verify_credentials(username,password)
 
-        if user and user.check_password(password):
+        if user:
             if user.role == "admin":
-                session.clear()
-                session["admin_logged_in"] = True
-                session["admin_username"] = user.username
+                start_auth_session(user)
                 set_alert("Login admin berhasil.", "success")
                 return redirect("/admin")
 
-            session.clear()
-            session["user_logged_in"] = True
-            session["user_username"] = user.username
+            start_auth_session(user)
             set_alert("Login user berhasil.", "success")
             return redirect("/user/dashboard")
 
@@ -1258,6 +1341,7 @@ def remove_favorite(book_id):
 def user_logout():
     if request.method == "GET":
         return render_template("logout_confirm.html", target="/logout")
+    revoke_current_session()
     session.clear()
     set_alert("Logout user berhasil.", "success")
     return redirect("/login")
@@ -1327,6 +1411,7 @@ def reset_admin_password(username, password):
     if not user:
         raise click.ClickException("Admin not found")
     user.set_password(password)
+    AuthSession.query.filter_by(user_id=user.id).delete()
     db.session.commit()
     click.echo("Admin password reset.")
 
