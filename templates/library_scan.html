@@ -1,0 +1,59 @@
+{% extends "library_shell.html" %}
+{% block title %}{{ 'Edit Copy' if copy else 'Scan Book' }} - BookVault{% endblock %}
+{% block library_content %}
+<section class="library-intro library-section">
+    <div><span class="eyebrow">Personal archive / cataloging</span><h1>{{ 'Edit eksemplar' if copy else 'Scan a book' }}</h1><p>Scan ISBN untuk edisi yang lebih tepat, atau gunakan OCR sampul. Periksa hasil sebelum menyimpan.</p></div>
+    <a href="{{ url_for('library.index') }}" class="library-link">← Collection</a>
+</section>
+{% if not copy %}
+<section id="scanner" class="library-section scan-panel" data-lookup="{{ url_for('library.metadata') }}" data-vendor="{{ url_for('static', filename='vendor/') }}">
+    <div class="section-heading section-heading--ruled"><h2>01 / Capture</h2></div>
+    <div class="scan-layout">
+        <div class="scan-viewport"><video id="camera-preview" playsinline muted hidden></video><span id="camera-placeholder">ISBN / EAN-13</span></div>
+        <div class="scan-controls">
+            <button type="button" class="primary-action" id="start-camera">Aktifkan kamera ISBN</button>
+            <button type="button" class="library-button" id="stop-camera" disabled>Matikan kamera</button>
+            <label for="cover-file">Foto sampul (JPEG, PNG, WebP)</label>
+            <input type="file" id="cover-file" accept="image/jpeg,image/png,image/webp" capture="environment">
+            <button type="button" id="ocr-button" class="library-button">Baca teks sampul</button>
+            <p class="library-meta">Foto diproses di perangkat. Hasil OCR tidak otomatis disimpan.</p>
+        </div>
+    </div>
+    <form id="lookup-form" role="search">
+        <label for="lookup-query">ISBN atau judul dan penulis</label>
+        <div class="lookup-row"><input id="lookup-query" maxlength="160" placeholder="978… / judul penulis"><button class="library-button" type="submit">Cari metadata</button></div>
+    </form>
+    <p id="scan-status" role="status" aria-live="polite">Masukkan ISBN atau mulai pemindaian.</p>
+    <div id="lookup-results" aria-label="Hasil metadata"></div>
+    <noscript><p>JavaScript diperlukan untuk pemindaian. Formulir manual tetap tersedia.</p></noscript>
+</section>
+{% endif %}
+<section class="library-section">
+    <div class="section-heading section-heading--ruled"><h2>{{ '01 / Metadata' if copy else '02 / Verify & save' }}</h2></div>
+    {% if error %}<div class="flash error" role="alert">{{ error }}</div>{% endif %}
+    <form method="post" class="library-form" id="copy-form">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <fieldset><legend>Karya & edisi</legend><div class="library-form-grid">
+        {% for name,label,maxlen in [('title','Judul',240),('author','Penulis',240),('isbn','ISBN',32),('publisher','Penerbit',240),('year','Tahun edisi',40),('printing','Cetakan / edisi',100),('translator','Penerjemah',240),('language','Bahasa',80),('format','Jenis sampul / format',80),('pages','Jumlah halaman',8)] %}
+            <label>{{ label }}<input name="{{ name }}" value="{{ data.get(name,'') }}" maxlength="{{ maxlen }}" {% if name in ['title','author'] %}required{% endif %} {% if name in ['isbn','pages'] %}inputmode="numeric"{% endif %}></label>
+        {% endfor %}
+        <label class="wide-field">URL sampul (opsional, dari penyedia metadata)<input name="cover" type="url" value="{{ data.get('cover','') }}" maxlength="1000"></label>
+        </div></fieldset>
+        <fieldset><legend>Klasifikasi & koleksi</legend><div class="library-form-grid">
+            <label>Tipe<select name="kind">{% for kind in kinds %}<option value="{{ kind }}" {% if data.get('kind','')==kind %}selected{% endif %}>{{ kind or 'Belum ditentukan' }}</option>{% endfor %}</select></label>
+            <label>Genre<input name="genre" maxlength="100" value="{{ data.get('genre','') }}"></label>
+            <label class="wide-field">Tema, subgenre, aliran (pisahkan koma)<input name="tags" maxlength="600" value="{{ data.get('tags','') }}"></label>
+            <label>Status<select name="status">{% for status in statuses %}<option {% if data.get('status','unread')==status %}selected{% endif %}>{{ status }}</option>{% endfor %}</select></label>
+            <label>Kondisi<input name="condition" maxlength="100" value="{{ data.get('condition','') }}"></label>
+            <label>Lokasi rak<input name="shelf" maxlength="100" value="{{ data.get('shelf','') }}"></label>
+            <label class="wide-field">Catatan pribadi<textarea name="notes" rows="4" maxlength="4000">{{ data.get('notes','') }}</textarea></label>
+        </div></fieldset>
+        {% if not copy %}<label class="duplicate-check"><input type="checkbox" name="allow_duplicate" value="yes" {% if warning %}autofocus{% endif %}> Ini eksemplar atau edisi lain dari karya yang sudah ada.</label>{% endif %}
+        <div class="library-form-actions"><button type="submit" class="primary-action">Simpan eksemplar</button><a href="{{ url_for('library.index') }}">Batal</a></div>
+    </form>
+    {% if copy %}
+    <details class="library-delete"><summary>Hapus eksemplar…</summary><p>Penghapusan permanen hanya berlaku pada koleksi pribadi ini.</p><form method="post" action="{{ url_for('library.delete',copy_id=copy.id) }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="library-button danger" type="submit">Konfirmasi hapus</button></form></details>
+    {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}{% if not copy %}<script defer src="{{ url_for('static', filename='js/scanner.js') }}"></script>{% endif %}{% endblock %}

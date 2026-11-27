@@ -1,0 +1,52 @@
+{% extends "library_shell.html" %}
+{% block title %}Physical Collection - BookVault{% endblock %}
+{% block library_content %}
+<section class="library-intro library-section">
+    <div>
+        <span class="eyebrow">Personal archive / collection</span>
+        <h1>Physical Collection</h1>
+        <p>Arsip buku yang benar-benar kamu miliki. Edisi dan cetakan dicatat terpisah.</p>
+    </div>
+    <a class="primary-action" href="{{ url_for('library.scan') }}">+ Scan buku</a>
+</section>
+<section class="library-stats" aria-label="Ringkasan">
+    {% for label, count in [('Eksemplar fisik',total),('Karya',titles),('Selesai dibaca',finished)] %}
+    <article class="library-stat"><span class="stat-label">{{ label }}</span><strong>{{ count }}</strong></article>
+    {% endfor %}
+</section>
+<section class="library-section">
+    <div class="section-heading section-heading--ruled"><h2>Collection index</h2><span class="section-note">{{ rows.total }} hasil</span></div>
+    <form method="get" class="library-filters">
+        <label>Cari<input type="search" name="q" value="{{ term }}" placeholder="Judul, penulis, ISBN, tema" maxlength="160"></label>
+        <label>Genre<select name="genre"><option value="">Semua</option>{% for g in genres %}<option {% if g==genre %}selected{% endif %}>{{ g }}</option>{% endfor %}</select></label>
+        <label>Tipe<select name="kind"><option value="">Semua</option>{% for k in kinds if k %}<option {% if k==kind %}selected{% endif %}>{{ k }}</option>{% endfor %}</select></label>
+        <label>Bahasa<select name="language"><option value="">Semua</option>{% for l in languages %}<option {% if l==language %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
+        <label>Status<select name="status"><option value="">Semua</option>{% for s in statuses %}<option {% if s==status %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+        <button type="submit" class="library-button">Filter</button>
+        <a href="{{ url_for('library.index') }}" class="library-link">Reset</a>
+    </form>
+    {% for copy in rows.items %}
+    {% set e=copy.edition %}
+    <article class="library-entry">
+        {% if e.cover %}<img class="library-cover" src="{{ e.cover }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% else %}<div class="library-cover library-cover--empty" aria-hidden="true">No cover</div>{% endif %}
+        <div>
+            <h3><a href="{{ url_for('library.edit', copy_id=copy.id) }}">{{ e.work.title }}</a></h3>
+            <p>{{ e.work.author }}</p>
+            <p class="library-meta">{{ [e.publisher,e.year,e.format,e.printing,e.language]|select|join(' · ') or 'Edisi belum lengkap' }}</p>
+            <p class="library-meta">{{ [copy.kind,copy.genre,copy.tags]|select|join(' · ') or 'Belum diklasifikasikan' }}</p>
+            {% if e.isbn %}<small class="library-isbn">ISBN {{ e.isbn }}</small>{% endif %}
+        </div>
+        <div class="library-entry-actions"><span>{{ copy.status }}</span><a href="{{ url_for('library.edit',copy_id=copy.id) }}">Edit</a></div>
+    </article>
+    {% else %}
+    <div class="library-empty"><h3>{% if total %}Tidak ada hasil.{% else %}Rak masih kosong.{% endif %}</h3><p>Mulai dengan memindai ISBN atau sampul, atau masukkan data manual.</p><a class="primary-action" href="{{ url_for('library.scan') }}">Tambah buku</a></div>
+    {% endfor %}
+    {% if rows.pages>1 %}
+    <nav class="library-pages" aria-label="Halaman">
+        {% if rows.has_prev %}<a href="{{ url_for('library.index',page=rows.prev_num,q=term,genre=genre,status=status,language=language,kind=kind) }}">← Previous</a>{% endif %}
+        <span>{{ rows.page }} / {{ rows.pages }}</span>
+        {% if rows.has_next %}<a href="{{ url_for('library.index',page=rows.next_num,q=term,genre=genre,status=status,language=language,kind=kind) }}">Next →</a>{% endif %}
+    </nav>
+    {% endif %}
+</section>
+{% endblock %}

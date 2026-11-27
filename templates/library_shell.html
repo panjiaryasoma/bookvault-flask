@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/user_dashboard.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/library.css') }}">
+{% endblock %}
+{% block main_class %}user-page{% endblock %}
+{% block flash_messages %}{% endblock %}
+{% block header %}
+<header class="user-topbar">
+    <a href="{{ url_for('library.index') }}" class="user-brand">BookVault <span>Library</span></a>
+    <nav class="user-topnav" aria-label="Navigasi">
+        <a href="/">Katalog</a>
+        <a href="/user/dashboard">Favorit</a>
+        <form method="post" action="/logout" class="library-logout">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+            <button type="submit" class="logout-link">Logout</button>
+        </form>
+    </nav>
+</header>
+{% endblock %}
+{% block content %}
+<div class="user-shell">
+    <aside class="user-sidebar">
+        <div class="sidebar-account">
+            <span class="sidebar-label">Personal Archive</span>
+            <strong>{{ session.get('user_username') }}</strong>
+            <small>Private collection</small>
+        </div>
+        <nav class="sidebar-nav" aria-label="Koleksi">
+            <a href="{{ url_for('library.index') }}" {% if request.endpoint == 'library.index' %}class="active" aria-current="page"{% endif %}>Physical collection</a>
+            <a href="{{ url_for('library.scan') }}" {% if request.endpoint == 'library.scan' %}class="active" aria-current="page"{% endif %}>Scan a book</a>
+            <a href="/user/dashboard">Favorites</a>
+            <a href="/public-books">Public discovery</a>
+        </nav>
+    </aside>
+    <div class="user-content library-content">
+        {% include "flash_messages.html" %}
+        {% for category, message in get_flashed_messages(with_categories=true) %}
+            <div class="flash {{ category }}" role="status">{{ message }}</div>
+        {% endfor %}
+        {% block library_content %}{% endblock %}
+    </div>
+</div>
+{% endblock %}
