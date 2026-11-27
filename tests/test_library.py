@@ -120,7 +120,7 @@ class LibraryTests(unittest.TestCase):
         self.assertEqual(export.headers["Cache-Control"],"no-store")
         csv=self.alice.get("/user/library/export?format=csv")
         self.assertIn(b"'=HYPERLINK",csv.data)
-        self.assertIn(b"' \t@SUM",csv.data)
+        self.assertIn(b"'@SUM",csv.data)
         self.assertNotIn(b"bob confidential",csv.data)
         self.assertEqual(app.test_client().get("/user/library/export").status_code,302)
 

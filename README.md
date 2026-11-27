@@ -1,4 +1,6 @@
-# BookVault
+# BookVault — Smart Library development branch
+
+> **Important:** the setup below describes the original coursework project. For the current branch, use [SMART_LIBRARY.md](SMART_LIBRARY.md) for secure setup, database migration, scanner assets, and test instructions. No default admin credential is created.
 
 BookVault adalah aplikasi katalog buku digital berbasis **Flask**, **SQLite**, dan **REST API**. Aplikasi ini menyediakan katalog buku lokal, fitur login user dan admin, dashboard admin, fitur favorit user, integrasi API publik Open Library, serta endpoint REST API untuk mengelola data buku.
 
@@ -167,7 +169,7 @@ Project ini menggunakan file `.env` untuk menyimpan API key lokal.
 Buat file `.env` di root project:
 
 ```env
-BOOKVAULT_API_KEY=bookvault-api-key-123
+BOOKVAULT_API_KEY=YOUR_RANDOM_API_KEY
 ```
 
 Sediakan juga file `.env.example` sebagai contoh konfigurasi:
@@ -202,22 +204,9 @@ http://127.0.0.1:5000
 
 ---
 
-## Akun Admin Default
+## Akun Admin
 
-Saat database pertama kali dibuat, aplikasi akan membuat akun admin default:
-
-```text
-Username: admin
-Password: admin123
-```
-
-Admin dapat login melalui:
-
-```text
-http://127.0.0.1:5000/admin/login
-```
-
----
+Buat administrator secara eksplisit dengan `flask --app app create-admin USERNAME`. Gunakan password yang kuat. Tidak ada akun admin bawaan.
 
 ## Halaman Aplikasi
 
@@ -294,7 +283,7 @@ Endpoint yang mengubah data wajib menggunakan API key.
 Header yang digunakan:
 
 ```text
-X-API-Key: bookvault-api-key-123
+X-API-Key: YOUR_RANDOM_API_KEY
 ```
 
 Jika API key tidak dikirim atau salah, response yang diberikan:
@@ -315,7 +304,7 @@ Jika API key tidak dikirim atau salah, response yang diberikan:
 Header:
 
 ```text
-X-API-Key: bookvault-api-key-123
+X-API-Key: YOUR_RANDOM_API_KEY
 Content-Type: application/json
 ```
 
@@ -338,7 +327,7 @@ Body:
 Header:
 
 ```text
-X-API-Key: bookvault-api-key-123
+X-API-Key: YOUR_RANDOM_API_KEY
 Content-Type: application/json
 ```
 
@@ -361,7 +350,7 @@ Body:
 Header:
 
 ```text
-X-API-Key: bookvault-api-key-123
+X-API-Key: YOUR_RANDOM_API_KEY
 ```
 
 Contoh URL:
@@ -521,7 +510,7 @@ instance/
 *.log
 ```
 
-Database `bookvault.db` dapat dibuat ulang saat aplikasi dijalankan karena aplikasi menggunakan `db.create_all()` dan fungsi seed data.
+Database lokal baru disimpan di `instance/bookvault.db`. Jangan hapus database pengguna. Gunakan backup dan panduan migrasi di SMART_LIBRARY.md.
 
 ---
 

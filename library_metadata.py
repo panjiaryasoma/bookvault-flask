@@ -28,6 +28,8 @@ def values(items, key=None):
 
 def safe_cover(value):
     try:
+        if not isinstance(value,str) or any(ord(c)<32 for c in value) or len(value)>1000:
+            return ""
         p=urlsplit(value or "")
         if p.scheme == "http":
             value="https:" + value[5:]

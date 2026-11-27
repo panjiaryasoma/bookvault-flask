@@ -18,6 +18,7 @@ from sqlalchemy import func
 from functools import wraps
 import os
 import requests
+from library_metadata import get_json as bounded_provider_json, safe_cover as provider_cover
 
 load_dotenv()
 
@@ -367,23 +368,12 @@ def _fetch_open_library(keyword):
         "limit": 12,
         "fields": "title,author_name,first_publish_year,edition_count,cover_i"
     }
-    headers = {
-        "User-Agent": "BookVault/1.0 (+https://github.com/panjiaryasoma/bookvault-flask)",
-        "Accept": "application/json"
-    }
-
-    response = requests.get(
-        url,
-        params=params,
-        headers=headers,
-        timeout=(3, 7)
-    )
-    response.raise_for_status()
-
-    data = response.json()
+    data = bounded_provider_json(url, params)
     books = []
 
-    for item in data.get("docs", []):
+    for item in data.get("docs", [])[:12]:
+        if not isinstance(item, dict):
+            continue
         cover_id = item.get("cover_i")
         cover_url = (
             f"https://covers.openlibrary.org/b/id/{cover_id}-M.jpg"
@@ -397,7 +387,7 @@ def _fetch_open_library(keyword):
             "author": ", ".join(authors),
             "year": _normalize_year(item.get("first_publish_year")),
             "edition_count": item.get("edition_count", 0),
-            "cover_url": cover_url,
+            "cover_url": provider_cover(cover_url),
             "source": "Open Library"
         })
 
@@ -416,23 +406,12 @@ def _fetch_google_books(keyword):
     if google_api_key:
         params["key"] = google_api_key
 
-    headers = {
-        "Accept": "application/json",
-        "User-Agent": "BookVault/1.0"
-    }
-
-    response = requests.get(
-        url,
-        params=params,
-        headers=headers,
-        timeout=(3, 9)
-    )
-    response.raise_for_status()
-
-    data = response.json()
+    data = bounded_provider_json(url, params)
     books = []
 
-    for item in data.get("items", []):
+    for item in data.get("items", [])[:12]:
+        if not isinstance(item, dict):
+            continue
         info = item.get("volumeInfo") or {}
         image_links = info.get("imageLinks") or {}
         cover_url = image_links.get("thumbnail") or image_links.get("smallThumbnail") or ""
@@ -447,7 +426,7 @@ def _fetch_google_books(keyword):
             "author": ", ".join(authors),
             "year": _normalize_year(info.get("publishedDate")),
             "edition_count": "-",
-            "cover_url": cover_url,
+            "cover_url": provider_cover(cover_url),
             "source": "Google Books"
         })
 
@@ -746,7 +725,7 @@ def api_docs():
 def index():
     q = request.args.get("q", "").strip()
     selected_genre = request.args.get("genre", "").strip()
-    page = request.args.get("page", 1, type=int)
+    page = min(10000, max(1, request.args.get("page", 1, type=int)))
     per_page = 8
 
     query = Book.query
@@ -1083,6 +1062,8 @@ def admin_delete_book(book_id):
 @app.route("/public-books", methods=["GET"])
 def public_books():
     keyword = request.args.get("q", "python").strip() or "python"
+    if len(keyword) > 160 or any(ord(c)<32 for c in keyword):
+        abort(400)
     books = []
     error = None
     provider = None
@@ -1090,32 +1071,35 @@ def public_books():
     try:
         books = _fetch_open_library(keyword)
         provider = "Open Library"
+        if not books:
+            books = _fetch_google_books(keyword)
+            provider = "Google Books"
     except requests.RequestException as exc:
-        app.logger.warning("Open Library request failed: %s", exc)
+        app.logger.warning("Open Library request failed")
 
         try:
             books = _fetch_google_books(keyword)
             provider = "Google Books"
         except requests.RequestException as fallback_exc:
-            app.logger.warning("Google Books fallback failed: %s", fallback_exc)
+            app.logger.warning("Google Books fallback failed")
             error = (
                 "Open Library dan sumber cadangan sementara tidak dapat diakses. "
                 "Silakan coba lagi beberapa saat."
             )
         except (TypeError, ValueError, KeyError) as fallback_parse_exc:
-            app.logger.warning("Google Books response could not be parsed: %s", fallback_parse_exc)
+            app.logger.warning("Google Books response could not be parsed")
             error = (
                 "Sumber cadangan merespons, tetapi datanya tidak dapat dibaca. "
                 "Silakan coba lagi."
             )
     except (TypeError, ValueError, KeyError) as exc:
-        app.logger.warning("Open Library response could not be parsed: %s", exc)
+        app.logger.warning("Open Library response could not be parsed")
 
         try:
             books = _fetch_google_books(keyword)
             provider = "Google Books"
         except requests.RequestException as fallback_exc:
-            app.logger.warning("Google Books fallback failed: %s", fallback_exc)
+            app.logger.warning("Google Books fallback failed")
             error = (
                 "Data API publik sementara tidak dapat diakses. "
                 "Silakan coba lagi beberapa saat."
@@ -1372,9 +1356,12 @@ def internal_server_error(e):
 from library_routes import register_library, WindowLimit
 register_library(app, db, User, login_required)
 login_limit = WindowLimit(limit=15, seconds=300)
+public_limit = WindowLimit(limit=30, seconds=60)
 
 @app.before_request
 def throttle_authentication():
+    if request.endpoint == "public_books" and not public_limit.allow(request.remote_addr or "unknown"):
+        abort(429)
     if request.method == "POST" and request.endpoint in {"user_login", "admin_login", "register"}:
         if not login_limit.allow(request.remote_addr or "unknown"):
             abort(429)
