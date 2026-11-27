@@ -552,3 +552,10 @@ Panji Arya Soma
 
 Project: **BookVault**  
 Tema: **Digital Book Catalog with Flask and REST API**
+
+
+---
+
+## Smart Library (feature branch)
+
+See [SMART_LIBRARY.md](SMART_LIBRARY.md) for local setup, scanner assets, database migration and deployment security. The private physical collection is separate from the public catalog and favorites. Use an existing user account or register one, then open /library/.

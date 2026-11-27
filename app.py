@@ -4,7 +4,9 @@ from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 from dotenv import load_dotenv
-from sqlalchemy import func
+from sqlalchemy import func, MetaData
+from sqlalchemy.engine import make_url
+import re
 from functools import wraps
 import os
 import requests
@@ -49,7 +51,17 @@ app.config["API_KEY"] = os.getenv("BOOKVAULT_API_KEY")
 if not app.config["API_KEY"] or len(app.config["API_KEY"]) < 24 or app.config["API_KEY"].startswith("replace-with-"):
     raise ValueError("BOOKVAULT_API_KEY belum diatur di file .env")
 
-db = SQLAlchemy(app)
+db_schema = os.getenv("BOOKVAULT_DB_SCHEMA")
+if db_schema and not re.fullmatch(r"[a-z_][a-z0-9_]{0,62}", db_schema):
+    raise ValueError("Invalid BOOKVAULT_DB_SCHEMA")
+if database_url.startswith("postgresql+") and app.config["SESSION_COOKIE_SECURE"]:
+    if not db_schema or db_schema in ("public", "pg_catalog", "information_schema"):
+        raise ValueError("Production PostgreSQL requires a private BOOKVAULT_DB_SCHEMA")
+    if make_url(database_url).query.get("sslmode") not in ("require","verify-ca","verify-full"):
+        raise ValueError("Production PostgreSQL requires TLS")
+if db_schema and database_url.startswith("sqlite:"):
+    raise ValueError("Do not set BOOKVAULT_DB_SCHEMA for SQLite")
+db = SQLAlchemy(app, metadata=MetaData(schema=db_schema))
 
 def csrf_token():
     if "_csrf" not in session:
@@ -518,8 +530,8 @@ def create_book():
         }), 400
 
     existing_book = Book.query.filter(
-        Book.title.ilike(title),
-        Book.author.ilike(author)
+        func.lower(Book.title) == title.lower(),
+        func.lower(Book.author) == author.lower()
     ).first()
 
     if existing_book:
@@ -612,8 +624,8 @@ def update_book(book_id):
 
     existing_book = Book.query.filter(
         Book.id != book.id,
-        Book.title.ilike(new_title),
-        Book.author.ilike(new_author)
+        func.lower(Book.title) == new_title.lower(),
+        func.lower(Book.author) == new_author.lower()
     ).first()
 
     if existing_book:
@@ -939,8 +951,8 @@ def admin_add_book():
             )
 
         existing_book = Book.query.filter(
-            Book.title.ilike(data["title"]),
-            Book.author.ilike(data["author"])
+            func.lower(Book.title) == data["title"].lower(),
+            func.lower(Book.author) == data["author"].lower()
         ).first()
 
         if existing_book:
@@ -990,8 +1002,8 @@ def admin_edit_book(book_id):
 
         existing_book = Book.query.filter(
             Book.id != book.id,
-            Book.title.ilike(data["title"]),
-            Book.author.ilike(data["author"])
+            func.lower(Book.title) == data["title"].lower(),
+            func.lower(Book.author) == data["author"].lower()
         ).first()
 
         if existing_book:
@@ -1128,8 +1140,8 @@ def admin_import_book():
         return redirect(safe_return("/public-books"))
 
     existing_book = Book.query.filter(
-        Book.title.ilike(title),
-        Book.author.ilike(author)
+        func.lower(Book.title) == title.lower(),
+        func.lower(Book.author) == author.lower()
     ).first()
 
     if existing_book:
@@ -1346,10 +1358,20 @@ register_library(app, db, User, throttle)
 @app.cli.command("init-db")
 def init_db():
     db.create_all()
-    seed_data()
+    if os.getenv("BOOKVAULT_SEED_DEMO") == "1":
+        seed_data()
+    elif os.getenv("BOOKVAULT_ADMIN_PASSWORD"):
+        if len(os.environ["BOOKVAULT_ADMIN_PASSWORD"]) < 12:
+            raise ValueError("Initial admin password must be at least 12 characters")
+        if not User.query.filter_by(role="admin").first():
+            admin = User(username="admin",role="admin")
+            admin.set_password(os.environ["BOOKVAULT_ADMIN_PASSWORD"])
+            db.session.add(admin)
+            db.session.commit()
 
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
-        seed_data()
+        if os.getenv("BOOKVAULT_SEED_DEMO") == "1":
+            seed_data()
     app.run(debug=False)

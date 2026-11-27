@@ -1,6 +1,7 @@
 import os
 import uuid
-from unittest.mock import patch, Mock
+from unittest.mock import patch, Mock, MagicMock
+import json
 import pytest
 os.environ.setdefault("DATABASE_URL","sqlite://")
 os.environ.setdefault("BOOKVAULT_SECRET_KEY","test-secret-"+("a"*48))
@@ -113,8 +114,13 @@ def test_xss_and_csv_formula_injection():
     assert "'+1+1" in csv and "'=HYPERLINK" in csv
 
 def test_metadata_exact_match_and_fallback():
-    no=Mock(status_code=200,content=b"{}",json=lambda:{})
-    wrong=Mock(status_code=200,content=b"{}",json=lambda:{"items":[{"volumeInfo":{"title":"Wrong","industryIdentifiers":[{"identifier":"9780140328722"}]}},{"volumeInfo":{"title":"Right","authors":["Author"],"industryIdentifiers":[{"identifier":"9780140328721"}],"categories":["Historical Fiction"]}}]})
+    def response(data):
+        r=MagicMock(status_code=200)
+        r.__enter__.return_value=r
+        r.iter_content.return_value=[json.dumps(data).encode()]
+        return r
+    no=response({})
+    wrong=response({"items":[{"volumeInfo":{"title":"Wrong","industryIdentifiers":[{"identifier":"9780140328722"}]}},{"volumeInfo":{"title":"Right","authors":["Author"],"industryIdentifiers":[{"identifier":"9780140328721"}],"categories":["Historical Fiction"]}}]})
     with patch("library.requests.get",side_effect=[no,wrong]) as mock:
         result=lookup_metadata("", "9780140328721")
         assert len(result)==1 and result[0]["title"]=="Right"
@@ -124,7 +130,7 @@ def test_metadata_exact_match_and_fallback():
 
 def test_provider_failure_and_rate_limit():
     a=client("alice")
-    with patch("library.lookup_metadata",return_value=[]) as mock:
+    with patch("app.time.time",return_value=1800000000), patch("library.lookup_metadata",return_value=[]) as mock:
         for _ in range(30):
             assert a.post("/library/lookup",json={"query":"Title"},headers=h()).status_code==200
         assert a.post("/library/lookup",json={"query":"Title"},headers=h()).status_code==429
@@ -152,3 +158,53 @@ def test_login_and_scanner_html():
     assert a.get("/library/scan").status_code==200
     assert b"Scan ISBN" in a.get("/library/scan").data
     assert a.get("/library/").status_code==200
+
+def test_lookup_malformed_and_oversized_provider():
+    a=client("alice")
+    assert a.post("/library/lookup",json={"query":"test","isbn":[]},headers=h()).status_code==400
+    huge=MagicMock(status_code=200)
+    huge.__enter__.return_value=huge
+    huge.iter_content.return_value=[b"x"*1000001,b"x"*1000001]
+    with patch("library.requests.get",side_effect=[huge,huge]):
+        assert lookup_metadata("Test")==[]
+
+def test_legacy_open_redirect_and_literal_duplicate():
+    a=client("alice")
+    with app.app_context(): bid=Book.query.first().id
+    response=a.post(f"/favorite/add/{bid}",data={"_csrf":"token-alice"},headers={"Referer":"https://malicious.example/"})
+    assert response.status_code==302 and response.headers["Location"]=="/"
+    key={"X-API-Key":app.config["API_KEY"]}
+    body={"title":"%","author":"Author","genre":"History","year":2001}
+    assert a.post("/api/books",json=body,headers=key).status_code==201
+
+def test_csrf_static_and_request_size():
+    a=client()
+    page=a.get("/login")
+    assert b'name="_csrf"' in page.data
+    assert "nonce-" in page.headers["Content-Security-Policy"]
+    a=client("alice")
+    assert a.post("/library/copies",data=b"x"*(300*1024),content_type="application/json",headers=h()).status_code==413
+
+def test_legacy_migration_roundtrip(tmp_path):
+    import sqlite3
+    from migrate_legacy import migrate
+    source=tmp_path/"legacy.db"
+    con=sqlite3.connect(source)
+    con.executescript("""
+    CREATE TABLE user(id INTEGER PRIMARY KEY, username TEXT, password_hash TEXT, role TEXT);
+    CREATE TABLE book(id INTEGER PRIMARY KEY, title TEXT, author TEXT, genre TEXT, year INTEGER, rating REAL, description TEXT, cover_image TEXT, created_at TEXT, updated_at TEXT);
+    CREATE TABLE favorite(id INTEGER PRIMARY KEY, user_id INTEGER, book_id INTEGER, created_at TEXT);
+    INSERT INTO book VALUES(17,'Legacy','Writer','History',1900,0,'','', '2020-01-01 00:00:00','2020-01-01 00:00:00');
+    INSERT INTO favorite VALUES(20,9,17,'2020-01-01 00:00:00');
+    """)
+    from werkzeug.security import generate_password_hash
+    con.execute("INSERT INTO user VALUES(9,'legacy',?,'user')",(generate_password_hash("old-password"),))
+    con.commit();con.close()
+    with app.app_context():
+        db.drop_all();db.create_all()
+        assert migrate(source)=={"user":1,"book":1,"favorite":1}
+        assert db.session.get(User,9).check_password("old-password")
+        assert db.session.get(Favorite,20).book_id==17
+        with pytest.raises(ValueError): migrate(source)
+        db.session.add(Book(title="Next",author="Writer",genre="History",year=1901));db.session.commit()
+        assert Book.query.filter_by(title="Next").first().id>17

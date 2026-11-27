@@ -142,6 +142,7 @@
                 <details class="import-panel">
                     <summary>Import to BookVault</summary>
                     <form method="POST" action="/admin/import-book" class="import-form">
+<input type="hidden" name="_csrf" value="{{ csrf_token() }}">
                         <input type="hidden" name="title" value="{{ book.title }}">
                         <input type="hidden" name="author" value="{{ book.author }}">
                         <input type="hidden" name="cover_url" value="{{ book.cover_url }}">
