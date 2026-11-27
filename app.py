@@ -8,23 +8,77 @@ from sqlalchemy import func
 from functools import wraps
 import os
 import requests
+import secrets
+import hmac
+import math
+from urllib.parse import urlsplit
+from flask import abort, url_for
+from sqlalchemy.exc import IntegrityError
 
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+# Same-origin browser UI; API clients do not require CORS.
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + os.path.join(BASE_DIR, "bookvault.db")
+database_url = os.getenv("DATABASE_URL", "sqlite:///" + os.path.join(app.instance_path, "bookvault.db"))
+if database_url.startswith(("postgres://", "postgresql://")):
+    database_url = "postgresql+psycopg://" + database_url.split("://", 1)[1]
+os.makedirs(app.instance_path, exist_ok=True)
+app.config["SQLALCHEMY_DATABASE_URI"] = database_url
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True}
+app.config["MAX_CONTENT_LENGTH"] = 256 * 1024
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = os.getenv("BOOKVAULT_HTTPS", "1") == "1"
+app.config["PERMANENT_SESSION_LIFETIME"] = 86400
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["SECRET_KEY"] = os.getenv("BOOKVAULT_SECRET_KEY", "bookvault-secret-key")
+app.config["SECRET_KEY"] = os.getenv("BOOKVAULT_SECRET_KEY")
+if not app.config["SECRET_KEY"] or len(app.config["SECRET_KEY"]) < 32:
+    raise ValueError("BOOKVAULT_SECRET_KEY must contain at least 32 characters")
 app.config["API_KEY"] = os.getenv("BOOKVAULT_API_KEY")
 
-if not app.config["API_KEY"]:
+if not app.config["API_KEY"] or len(app.config["API_KEY"]) < 24:
     raise ValueError("BOOKVAULT_API_KEY belum diatur di file .env")
 
 db = SQLAlchemy(app)
+
+def csrf_token():
+    if "_csrf" not in session:
+        session["_csrf"] = secrets.token_urlsafe(32)
+    return session["_csrf"]
+
+app.jinja_env.globals["csrf_token"] = csrf_token
+
+@app.before_request
+def protect_browser_writes():
+    if request.method not in ("POST", "PUT", "PATCH", "DELETE"):
+        return
+    if request.endpoint in {"create_book", "update_book", "delete_book"}:
+        return  # machine API: authenticated separately by API key
+    expected = session.get("_csrf")
+    supplied = request.headers.get("X-CSRF-Token") or request.form.get("_csrf")
+    if not expected or not supplied or not hmac.compare_digest(expected.encode(), supplied.encode()):
+        abort(403)
+
+@app.after_request
+def security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(self), microphone=(), geolocation=()"
+    if request.path.startswith(("/library", "/user", "/admin", "/login", "/register")):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+def safe_return(default):
+    target = request.referrer
+    if target:
+        parsed = urlsplit(target)
+        if parsed.netloc == urlsplit(request.host_url).netloc and parsed.path.startswith("/") and not parsed.path.startswith("//"):
+            return parsed.path + ("?" + parsed.query if parsed.query else "")
+    return default
 
 
 def set_alert(message, category="success"):
@@ -77,7 +131,7 @@ def api_key_required(f):
     def wrapper(*args, **kwargs):
         api_key = request.headers.get("X-API-Key")
 
-        if api_key != app.config["API_KEY"]:
+        if not api_key or not hmac.compare_digest(api_key.encode(), app.config["API_KEY"].encode()):
             return jsonify({
                 "error": "Unauthorized",
                 "message": "Valid API key is required"
@@ -139,9 +193,10 @@ class Favorite(db.Model):
 
 
 def seed_data():
-    if User.query.first() is None:
+    admin_password = os.getenv("BOOKVAULT_ADMIN_PASSWORD")
+    if admin_password and len(admin_password) >= 12 and not User.query.filter_by(role="admin").first():
         admin = User(username="admin", role="admin")
-        admin.set_password("admin123")
+        admin.set_password(admin_password)
         db.session.add(admin)
 
     if Book.query.first() is None:
@@ -402,7 +457,7 @@ def create_book():
             "message": "Rating must be a number"
         }), 400
 
-    if rating_value < 0 or rating_value > 5:
+    if not math.isfinite(rating_value) or rating_value < 0 or rating_value > 5:
         return jsonify({
             "error": "Invalid rating",
             "message": "Rating must be between 0 and 5"
@@ -493,7 +548,7 @@ def update_book(book_id):
             "message": "Rating must be a number"
         }), 400
 
-    if rating_value < 0 or rating_value > 5:
+    if not math.isfinite(rating_value) or rating_value < 0 or rating_value > 5:
         return jsonify({
             "error": "Invalid rating",
             "message": "Rating must be between 0 and 5"
@@ -792,7 +847,7 @@ def _validate_admin_book_form(form):
     except ValueError:
         return None, "Rating harus berupa angka."
 
-    if rating_value < 0 or rating_value > 5:
+    if not math.isfinite(rating_value) or rating_value < 0 or rating_value > 5:
         return None, "Rating harus berada di antara 0 sampai 5."
 
     return {
@@ -984,11 +1039,11 @@ def admin_import_book():
 
     if not title:
         set_alert("Buku gagal disimpan karena judul tidak valid.", "error")
-        return redirect(request.referrer or "/public-books")
+        return redirect(safe_return("/public-books"))
 
     if not genre:
         set_alert("Buku gagal disimpan karena genre wajib diisi.", "error")
-        return redirect(request.referrer or "/public-books")
+        return redirect(safe_return("/public-books"))
 
     if not author:
         author = "Tidak diketahui"
@@ -997,7 +1052,7 @@ def admin_import_book():
         year = int(year_raw)
     except ValueError:
         set_alert("Buku gagal disimpan karena tahun wajib berupa angka.", "error")
-        return redirect(request.referrer or "/public-books")
+        return redirect(safe_return("/public-books"))
 
     current_year = datetime.now().year
     if year < 1000 or year > current_year:
@@ -1005,7 +1060,7 @@ def admin_import_book():
             f"Buku gagal disimpan karena tahun harus berada di antara 1000 sampai {current_year}.",
             "error"
         )
-        return redirect(request.referrer or "/public-books")
+        return redirect(safe_return("/public-books"))
 
     existing_book = Book.query.filter(
         Book.title.ilike(title),
@@ -1014,7 +1069,7 @@ def admin_import_book():
 
     if existing_book:
         set_alert("Buku sudah ada di katalog lokal.", "warning")
-        return redirect(request.referrer or "/public-books")
+        return redirect(safe_return("/public-books"))
 
     imported_book = Book(
         title=title,
@@ -1030,7 +1085,7 @@ def admin_import_book():
     db.session.commit()
 
     set_alert("Buku berhasil disimpan ke katalog lokal.", "success")
-    return redirect(request.referrer or "/public-books")
+    return redirect(safe_return("/public-books"))
 
 
 @app.route("/register", methods=["GET", "POST"])
@@ -1040,7 +1095,7 @@ def register():
         password = request.form.get("password", "").strip()
         confirm_password = request.form.get("confirm_password", "").strip()
 
-        if not username or not password or not confirm_password:
+        if not username or len(username) > 80 or not password or len(password) < 10 or len(password) > 256 or not confirm_password:
             set_alert("Semua field wajib diisi.", "error")
             return redirect("/register")
 
@@ -1057,7 +1112,12 @@ def register():
         user.set_password(password)
 
         db.session.add(user)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            set_alert("Username sudah digunakan.", "warning")
+            return redirect("/register")
 
         set_alert("Registrasi berhasil. Silakan login.", "success")
         return redirect("/login")
@@ -1134,7 +1194,7 @@ def add_favorite(book_id):
 
     if not book:
         set_alert("Buku tidak ditemukan.", "error")
-        return redirect(request.referrer or "/")
+        return redirect(safe_return("/"))
 
     existing_favorite = Favorite.query.filter_by(
         user_id=user.id,
@@ -1149,7 +1209,7 @@ def add_favorite(book_id):
     else:
         set_alert("Buku sudah ada di daftar favorit.", "warning")
 
-    return redirect(request.referrer or "/")
+    return redirect(safe_return("/"))
 
 
 @app.route("/favorite/remove/<int:book_id>", methods=["POST"])
@@ -1173,7 +1233,7 @@ def remove_favorite(book_id):
     else:
         set_alert("Buku tidak ditemukan di daftar favorit.", "warning")
 
-    return redirect(request.referrer or "/user/dashboard")
+    return redirect(safe_return("/user/dashboard"))
 
 
 @app.route("/logout")
@@ -1205,9 +1265,16 @@ def internal_server_error(e):
     return render_template("500.html"), 500
 
 
+from library import register_library
+register_library(app, db, User)
+
+@app.cli.command("init-db")
+def init_db():
+    db.create_all()
+    seed_data()
+
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
         seed_data()
-
-    app.run(debug=True)
+    app.run(debug=False)
