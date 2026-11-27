@@ -33,7 +33,17 @@ jobs:
       - run: pip install -r requirements.txt pytest==8.3.5
       - run: python -m compileall -q app.py library.py
       - if: matrix.db == 'postgres'
-        run: echo 'DATABASE_URL=postgresql+psycopg://bookvault:bookvault_test@localhost:5432/bookvault' >> "$GITHUB_ENV"
+        run: |
+          PGPASSWORD=bookvault_test psql -h localhost -U bookvault -d bookvault -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE bookvault_runtime LOGIN PASSWORD 'runtime_test' NOSUPERUSER NOCREATEDB NOCREATEROLE;
+          CREATE ROLE anon NOLOGIN;
+          CREATE ROLE authenticated NOLOGIN;
+          CREATE SCHEMA bookvault_private AUTHORIZATION bookvault_runtime;
+          REVOKE ALL ON SCHEMA bookvault_private FROM PUBLIC, anon, authenticated;
+          ALTER DEFAULT PRIVILEGES FOR ROLE bookvault_runtime IN SCHEMA bookvault_private REVOKE ALL ON TABLES FROM PUBLIC, anon, authenticated;
+          SQL
+          echo 'DATABASE_URL=postgresql+psycopg://bookvault_runtime:runtime_test@localhost:5432/bookvault' >> "$GITHUB_ENV"
+          echo 'BOOKVAULT_DB_SCHEMA=bookvault_private' >> "$GITHUB_ENV"
       - run: python -m pytest -q
   assets:
     runs-on: ubuntu-latest
@@ -61,7 +71,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: pip install -r requirements.txt playwright==1.51.1
+      - run: pip install -r requirements.txt playwright==1.65.2
       - run: npm install --ignore-scripts --no-audit --no-fund && npm run build
       - run: python -m playwright install --with-deps chromium
       - run: flask --app app init-db

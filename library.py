@@ -11,7 +11,7 @@ from functools import wraps
 
 import requests
 from flask import Blueprint, abort, jsonify, redirect, render_template, request, session, url_for, Response
-from sqlalchemy import UniqueConstraint, func
+from sqlalchemy import UniqueConstraint, ForeignKeyConstraint, func
 from sqlalchemy.exc import IntegrityError
 
 GENRES = ("Literary Fiction", "Historical Fiction", "Political Fiction", "Mystery", "Fantasy", "Science Fiction", "Romance", "Philosophy", "Theology", "History", "Politics", "Science", "Biography", "Technology", "Other", "Unclassified")
@@ -148,12 +148,13 @@ def register_library(app, db, User, throttle):
         key = db.Column(db.String(64), nullable=False)
         title = db.Column(db.String(300), nullable=False)
         author = db.Column(db.String(200), nullable=False)
-        __table_args__ = (UniqueConstraint("user_id","key"),)
+        __table_args__ = (UniqueConstraint("user_id","key"), UniqueConstraint("id","user_id"))
 
     class LibraryEdition(db.Model):
         __tablename__ = "library_edition"
         id = db.Column(db.Integer, primary_key=True)
-        work_id = db.Column(db.Integer, db.ForeignKey("library_work.id"), nullable=False, index=True)
+        work_id = db.Column(db.Integer, nullable=False, index=True)
+        user_id = db.Column(db.Integer, nullable=False, index=True)
         key = db.Column(db.String(64), nullable=False)
         isbn = db.Column(db.String(13), nullable=False, default="")
         publisher = db.Column(db.String(200), nullable=False, default="")
@@ -164,13 +165,15 @@ def register_library(app, db, User, throttle):
         year = db.Column(db.Integer)
         pages = db.Column(db.Integer)
         work = db.relationship(LibraryWork)
-        __table_args__ = (UniqueConstraint("work_id","key"),)
+        __table_args__ = (UniqueConstraint("work_id","key"), UniqueConstraint("id","user_id"), ForeignKeyConstraint(["work_id","user_id"],["library_work.id","library_work.user_id"]))
 
     class LibraryCopy(db.Model):
         __tablename__ = "library_copy"
         id = db.Column(db.String(36), primary_key=True)
         user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
-        edition_id = db.Column(db.Integer, db.ForeignKey("library_edition.id"), nullable=False, index=True)
+        edition_id = db.Column(db.Integer, nullable=False, index=True)
+        request_token = db.Column(db.String(36), nullable=False)
+        request_hash = db.Column(db.String(64), nullable=False)
         printing = db.Column(db.String(100), nullable=False, default="")
         genre = db.Column(db.String(80), nullable=False)
         tags = db.Column(db.String(500), nullable=False, default="")
@@ -179,6 +182,7 @@ def register_library(app, db, User, throttle):
         notes = db.Column(db.Text, nullable=False, default="")
         created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
         edition = db.relationship(LibraryEdition)
+        __table_args__ = (UniqueConstraint("user_id","request_token"), ForeignKeyConstraint(["edition_id","user_id"],["library_edition.id","library_edition.user_id"]))
 
     app.extensions["library_models"] = (LibraryWork, LibraryEdition, LibraryCopy)
     bp = Blueprint("library", __name__, url_prefix="/library")
@@ -211,7 +215,7 @@ def register_library(app, db, User, throttle):
         key=fingerprint(*(d[n] for n in names))
         e=LibraryEdition.query.filter_by(work_id=w.id,key=key).first()
         if not e:
-            e=LibraryEdition(work_id=w.id,key=key,**{n:d[n] for n in names})
+            e=LibraryEdition(work_id=w.id,user_id=uid,key=key,**{n:d[n] for n in names})
             db.session.add(e); db.session.flush()
         return e
 
@@ -268,11 +272,10 @@ def register_library(app, db, User, throttle):
             d=validate(data)
             token=str(uuid.UUID(data.get("token","")))
         except (ValueError,TypeError,AttributeError): return jsonify(error="Metadata atau token tidak valid."),400
-        existing=db.session.get(LibraryCopy,token)
+        request_hash=hashlib.sha256(json.dumps(d,ensure_ascii=False,sort_keys=True).encode()).hexdigest()
+        existing=owned(uid).filter(LibraryCopy.request_token==token).first()
         if existing:
-            if existing.user_id!=uid: return jsonify(error="Conflict"),409
-            original=serialize(existing)
-            if any(original[k]!=v for k,v in d.items()):
+            if existing.request_hash != request_hash:
                 return jsonify(error="Token already used with different metadata."),409
             return jsonify(id=existing.id,duplicate=True),200
         same=owned(uid).filter(LibraryWork.key==fingerprint(d["title"],d["author"])).count()
@@ -280,12 +283,16 @@ def register_library(app, db, User, throttle):
             return jsonify(error="Karya ini sudah dimiliki. Simpan sebagai eksemplar lain?",duplicates=same),409
         try:
             e=edition_for(uid,d)
-            c=LibraryCopy(id=token,user_id=uid,edition_id=e.id,**{k:d[k] for k in ("printing","genre","tags","status","shelf","notes")})
+            cid=str(uuid.uuid4())
+            c=LibraryCopy(id=cid,user_id=uid,edition_id=e.id,request_token=token,request_hash=request_hash,**{k:d[k] for k in ("printing","genre","tags","status","shelf","notes")})
             db.session.add(c); db.session.commit()
         except IntegrityError:
             db.session.rollback()
+            existing=owned(uid).filter(LibraryCopy.request_token==token).first()
+            if existing and existing.request_hash==request_hash:
+                return jsonify(id=existing.id,duplicate=True),200
             return jsonify(error="Konflik data. Coba lagi."),409
-        return jsonify(id=token),201
+        return jsonify(id=cid),201
 
     @bp.put("/copies/<copy_id>")
     def update(copy_id):

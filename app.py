@@ -3,7 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 from dotenv import load_dotenv
-from sqlalchemy import func, MetaData
+from sqlalchemy import func, MetaData, event
 from sqlalchemy.engine import make_url
 import re
 from functools import wraps
@@ -54,13 +54,22 @@ db_schema = os.getenv("BOOKVAULT_DB_SCHEMA")
 if db_schema and not re.fullmatch(r"[a-z_][a-z0-9_]{0,62}", db_schema):
     raise ValueError("Invalid BOOKVAULT_DB_SCHEMA")
 if database_url.startswith("postgresql+") and app.config["SESSION_COOKIE_SECURE"]:
-    if not db_schema or db_schema in ("public", "pg_catalog", "information_schema"):
+    if not db_schema or db_schema in ("public", "information_schema") or db_schema.startswith("pg_"):
         raise ValueError("Production PostgreSQL requires a private BOOKVAULT_DB_SCHEMA")
+    if not app.config.get("TRUSTED_HOSTS"):
+        raise ValueError("Production PostgreSQL requires BOOKVAULT_TRUSTED_HOSTS")
     if make_url(database_url).query.get("sslmode") not in ("require","verify-ca","verify-full"):
         raise ValueError("Production PostgreSQL requires TLS")
 if db_schema and database_url.startswith("sqlite:"):
     raise ValueError("Do not set BOOKVAULT_DB_SCHEMA for SQLite")
 db = SQLAlchemy(app, metadata=MetaData(schema=db_schema))
+with app.app_context():
+    if db.engine.dialect.name == "sqlite":
+        @event.listens_for(db.engine, "connect")
+        def enable_sqlite_foreign_keys(connection, _):
+            cursor = connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
 
 def csrf_token():
     if "_csrf" not in session:
@@ -153,6 +162,8 @@ def admin_required(f):
 
     return wrapper
 
+
+DUMMY_PASSWORD_HASH = generate_password_hash(secrets.token_urlsafe(32))
 
 def api_key_required(f):
     @wraps(f)
@@ -786,7 +797,8 @@ def admin_login():
 
         user = User.query.filter_by(username=username).first()
 
-        if user and user.check_password(password) and user.role == "admin":
+        verified = check_password_hash(user.password_hash if user else DUMMY_PASSWORD_HASH, password)
+        if user and verified and user.role == "admin":
             session.clear()
             session.permanent = True
             session["admin_logged_in"] = True
@@ -1217,7 +1229,8 @@ def user_login():
 
         user = User.query.filter_by(username=username).first()
 
-        if user and user.check_password(password):
+        verified = check_password_hash(user.password_hash if user else DUMMY_PASSWORD_HASH, password)
+        if user and verified:
             if user.role == "admin":
                 session.clear()
                 session.permanent = True

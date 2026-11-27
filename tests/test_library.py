@@ -208,3 +208,30 @@ def test_legacy_migration_roundtrip(tmp_path):
         with pytest.raises(ValueError): migrate(source)
         db.session.add(Book(title="Next",author="Writer",genre="History",year=1901));db.session.commit()
         assert Book.query.filter_by(title="Next").first().id>17
+
+def test_idempotency_token_is_owner_scoped():
+    a,b=client("alice"),client("bob")
+    d=payload()
+    x=a.post("/library/copies",json=d,headers=h())
+    y=b.post("/library/copies",json=d,headers=h("bob"))
+    assert x.status_code==201 and y.status_code==201 and x.json["id"]!=y.json["id"]
+    assert x.json["id"]!=d["token"]
+    assert a.post("/library/copies",json=d,headers=h()).json["id"]==x.json["id"]
+
+def test_database_rejects_cross_owner_foreign_key():
+    from sqlalchemy.exc import IntegrityError
+    a=client("alice"); cid=make(a)
+    works,editions,copies=app.extensions["library_models"]
+    with app.app_context():
+        other=User.query.filter_by(username="bob").first()
+        original=db.session.get(copies,cid)
+        db.session.add(copies(id=str(uuid.uuid4()),user_id=other.id,edition_id=original.edition_id,request_token=str(uuid.uuid4()),request_hash="a"*64,genre="History",status="unread"))
+        with pytest.raises(IntegrityError): db.session.commit()
+        db.session.rollback()
+
+def test_postgres_schema_not_accessible_to_anon():
+    if db_schema := os.getenv("BOOKVAULT_DB_SCHEMA"):
+        from sqlalchemy import text
+        with app.app_context():
+            assert db.session.execute(text("SELECT has_schema_privilege('anon', :s, 'USAGE')"),{"s":db_schema}).scalar() is False
+            assert db.session.execute(text("SELECT has_table_privilege('anon', :t, 'SELECT')"),{"t":db_schema+".library_copy"}).scalar() is False
