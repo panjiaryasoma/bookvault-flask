@@ -19,7 +19,7 @@
   </section>
   <section class="scan-panel" aria-labelledby="review-title">
     <h2 id="review-title">02 / Review copy</h2>
-    <form id="copy-form">
+    <form id="copy-form" method="POST" action="{{ url_for('library.create') }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}">
       <div class="scan-fields">
       {% for name,label,maxlen in [('title','Judul',300),('author','Penulis',200),('isbn','ISBN',32),('publisher','Penerbit',200),('language','Bahasa',40),('translator','Penerjemah',200),('edition','Edisi',100),('printing','Cetakan',100),('shelf','Lokasi rak',100),('tags','Tags / tema (pisahkan koma)',500)] %}
       <label class="scan-field {% if name in ('title','author','tags') %}wide{% endif %}">{{ label }}<input name="{{ name }}" maxlength="{{ maxlen }}" value="{{ book.get(name,'') or '' }}" {% if name in ('title','author') %}required{% endif %}></label>

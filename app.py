@@ -12,12 +12,19 @@ import secrets
 import hmac
 import math
 from urllib.parse import urlsplit
-from flask import abort, url_for
+from flask import abort, url_for, g
+from werkzeug.middleware.proxy_fix import ProxyFix
+import time
+import hashlib
 from sqlalchemy.exc import IntegrityError
 
 load_dotenv()
 
 app = Flask(__name__)
+if os.getenv("BOOKVAULT_TRUST_PROXY") == "1":
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+if os.getenv("BOOKVAULT_TRUSTED_HOSTS"):
+    app.config["TRUSTED_HOSTS"] = os.getenv("BOOKVAULT_TRUSTED_HOSTS").split(",")
 # Same-origin browser UI; API clients do not require CORS.
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -35,11 +42,11 @@ app.config["SESSION_COOKIE_SECURE"] = os.getenv("BOOKVAULT_HTTPS", "1") == "1"
 app.config["PERMANENT_SESSION_LIFETIME"] = 86400
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = os.getenv("BOOKVAULT_SECRET_KEY")
-if not app.config["SECRET_KEY"] or len(app.config["SECRET_KEY"]) < 32:
+if not app.config["SECRET_KEY"] or len(app.config["SECRET_KEY"]) < 32 or app.config["SECRET_KEY"].startswith("replace-with-"):
     raise ValueError("BOOKVAULT_SECRET_KEY must contain at least 32 characters")
 app.config["API_KEY"] = os.getenv("BOOKVAULT_API_KEY")
 
-if not app.config["API_KEY"] or len(app.config["API_KEY"]) < 24:
+if not app.config["API_KEY"] or len(app.config["API_KEY"]) < 24 or app.config["API_KEY"].startswith("replace-with-"):
     raise ValueError("BOOKVAULT_API_KEY belum diatur di file .env")
 
 db = SQLAlchemy(app)
@@ -53,6 +60,7 @@ app.jinja_env.globals["csrf_token"] = csrf_token
 
 @app.before_request
 def protect_browser_writes():
+    g.csp_nonce = secrets.token_urlsafe(24)
     if request.method not in ("POST", "PUT", "PATCH", "DELETE"):
         return
     if request.endpoint in {"create_book", "update_book", "delete_book"}:
@@ -68,15 +76,24 @@ def security_headers(response):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(self), microphone=(), geolocation=()"
-    if request.path.startswith(("/library", "/user", "/admin", "/login", "/register")):
+    if response.mimetype == "text/html" or request.path.startswith(("/library", "/user", "/admin", "/login", "/register")):
+        nonce = getattr(g, "csp_nonce", "")
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; "
+            f"script-src 'self' 'nonce-{nonce}' 'wasm-unsafe-eval'; "
+            "style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; "
+            "connect-src 'self' https://openlibrary.org https://www.googleapis.com; worker-src 'self' blob:; media-src 'self' blob:"
+        )
         response.headers["Cache-Control"] = "no-store"
+    if app.config["SESSION_COOKIE_SECURE"]:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000"
     return response
 
 def safe_return(default):
     target = request.referrer
     if target:
         parsed = urlsplit(target)
-        if parsed.netloc == urlsplit(request.host_url).netloc and parsed.path.startswith("/") and not parsed.path.startswith("//"):
+        if parsed.netloc == urlsplit(request.host_url).netloc and parsed.path in {"/", "/public-books", "/user/dashboard", "/admin"}:
             return parsed.path + ("?" + parsed.query if parsed.query else "")
     return default
 
@@ -141,6 +158,41 @@ def api_key_required(f):
 
     return wrapper
 
+
+class RateWindow(db.Model):
+    key = db.Column(db.String(64), primary_key=True)
+    slot = db.Column(db.Integer, primary_key=True)
+    hits = db.Column(db.Integer, nullable=False, default=1)
+
+def throttle(scope, identity, limit, seconds=60):
+    # Fixed one-minute windows, shared across worker processes. Identity is never stored raw.
+    slot = int(time.time()) // seconds
+    key = hmac.new(app.config["SECRET_KEY"].encode(), (scope + ":" + str(identity)).encode(), hashlib.sha256).hexdigest()
+    # Bound historical rows. All currently used scopes use 60-second windows.
+    RateWindow.query.filter(RateWindow.slot < slot - 2).delete(synchronize_session=False)
+    changed = RateWindow.query.filter_by(key=key, slot=slot).filter(RateWindow.hits < limit).update({RateWindow.hits: RateWindow.hits + 1}, synchronize_session=False)
+    if changed:
+        db.session.commit()
+        return
+    if db.session.get(RateWindow, (key,slot)):
+        db.session.commit()
+        abort(429)
+    try:
+        db.session.add(RateWindow(key=key,slot=slot,hits=1))
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        changed = RateWindow.query.filter_by(key=key,slot=slot).filter(RateWindow.hits < limit).update({RateWindow.hits:RateWindow.hits+1},synchronize_session=False)
+        db.session.commit()
+        if not changed:
+            abort(429)
+
+@app.errorhandler(429)
+def rate_limited(error):
+    response = jsonify(error="Too many requests; try again shortly.")
+    response.status_code = 429
+    response.headers["Retry-After"] = "60"
+    return response
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -407,7 +459,7 @@ def get_book(book_id):
 def create_book():
     data = request.get_json(silent=True)
 
-    if not data:
+    if not isinstance(data, dict) or not data:
         return jsonify({"error": "Invalid JSON body"}), 400
 
     title = str(data.get("title", "")).strip()
@@ -418,6 +470,8 @@ def create_book():
     description = str(data.get("description", "")).strip()
     cover_image = str(data.get("cover_image", "")).strip()
 
+    if any(len(v)>n or "\x00" in v for v,n in [(title,150),(author,100),(genre,80),(description,10000),(cover_image,255)]):
+        return jsonify(error="Field too long or invalid"),400
     missing = []
     if not title:
         missing.append("title")
@@ -502,7 +556,7 @@ def update_book(book_id):
         return jsonify({"error": "Book not found"}), 404
 
     data = request.get_json(silent=True)
-    if not data:
+    if not isinstance(data, dict) or not data:
         return jsonify({"error": "Invalid JSON body"}), 400
 
     new_title = str(data.get("title", book.title)).strip()
@@ -511,6 +565,8 @@ def update_book(book_id):
     new_description = str(data.get("description", book.description or "")).strip()
     new_cover_image = str(data.get("cover_image", book.cover_image or "")).strip()
 
+    if any(len(v)>n or "\x00" in v for v,n in [(new_title,150),(new_author,100),(new_genre,80),(new_description,10000),(new_cover_image,255)]):
+        return jsonify(error="Field too long or invalid"),400
     missing = []
     if not new_title:
         missing.append("title")
@@ -710,13 +766,18 @@ def book_detail(book_id):
 @app.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
     if request.method == "POST":
+        throttle("auth-ip", request.remote_addr or "unknown", 40)
         username = request.form.get("username", "").strip()
+        throttle("auth-account", username[:80].casefold(), 10)
         password = request.form.get("password", "").strip()
+        if len(username) > 80 or len(password) > 256:
+            abort(400)
 
         user = User.query.filter_by(username=username).first()
 
         if user and user.check_password(password) and user.role == "admin":
             session.clear()
+            session.permanent = True
             session["admin_logged_in"] = True
             session["admin_username"] = user.username
             set_alert("Login admin berhasil.", "success")
@@ -728,7 +789,7 @@ def admin_login():
     return render_template("admin_login.html", error=None)
 
 
-@app.route("/admin/logout")
+@app.route("/admin/logout", methods=["POST"])
 def admin_logout():
     session.clear()
     set_alert("Logout admin berhasil.", "success")
@@ -830,6 +891,8 @@ def _validate_admin_book_form(form):
     rating_raw = form.get("rating", "0").strip()
     description = form.get("description", "").strip()
 
+    if any(len(v)>n or "\x00" in v for v,n in [(title,150),(author,100),(genre,80),(description,10000)]):
+        return None, "Field terlalu panjang atau tidak valid."
     if not title or not author or not genre or not year_raw:
         return None, "Judul, penulis, genre, dan tahun wajib diisi."
 
@@ -979,7 +1042,7 @@ def admin_delete_book(book_id):
 
 @app.route("/public-books", methods=["GET"])
 def public_books():
-    keyword = request.args.get("q", "python").strip() or "python"
+    keyword = request.args.get("q", "python").strip()[:240] or "python"
     books = []
     error = None
     provider = None
@@ -1037,6 +1100,8 @@ def admin_import_book():
     genre = request.form.get("genre", "").strip()
     source = request.form.get("source", "API publik").strip() or "API publik"
 
+    if any(len(v)>n or "\x00" in v for v,n in [(title,150),(author,100),(genre,80),(cover_url,255),(source,100)]):
+        abort(400)
     if not title:
         set_alert("Buku gagal disimpan karena judul tidak valid.", "error")
         return redirect(safe_return("/public-books"))
@@ -1091,8 +1156,12 @@ def admin_import_book():
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "POST":
+        throttle("auth-ip", request.remote_addr or "unknown", 40)
         username = request.form.get("username", "").strip()
+        throttle("auth-account", username[:80].casefold(), 10)
         password = request.form.get("password", "").strip()
+        if len(username) > 80 or len(password) > 256:
+            abort(400)
         confirm_password = request.form.get("confirm_password", "").strip()
 
         if not username or len(username) > 80 or not password or len(password) < 10 or len(password) > 256 or not confirm_password:
@@ -1128,20 +1197,26 @@ def register():
 @app.route("/login", methods=["GET", "POST"])
 def user_login():
     if request.method == "POST":
+        throttle("auth-ip", request.remote_addr or "unknown", 40)
         username = request.form.get("username", "").strip()
+        throttle("auth-account", username[:80].casefold(), 10)
         password = request.form.get("password", "").strip()
+        if len(username) > 80 or len(password) > 256:
+            abort(400)
 
         user = User.query.filter_by(username=username).first()
 
         if user and user.check_password(password):
             if user.role == "admin":
                 session.clear()
+                session.permanent = True
                 session["admin_logged_in"] = True
                 session["admin_username"] = user.username
                 set_alert("Login admin berhasil.", "success")
                 return redirect("/admin")
 
             session.clear()
+            session.permanent = True
             session["user_logged_in"] = True
             session["user_username"] = user.username
             set_alert("Login user berhasil.", "success")
@@ -1236,7 +1311,7 @@ def remove_favorite(book_id):
     return redirect(safe_return("/user/dashboard"))
 
 
-@app.route("/logout")
+@app.route("/logout", methods=["POST"])
 def user_logout():
     session.clear()
     set_alert("Logout user berhasil.", "success")
@@ -1266,7 +1341,7 @@ def internal_server_error(e):
 
 
 from library import register_library
-register_library(app, db, User)
+register_library(app, db, User, throttle)
 
 @app.cli.command("init-db")
 def init_db():

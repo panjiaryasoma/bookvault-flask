@@ -130,7 +130,7 @@ def lookup_metadata(query, isbn=None):
             pass
     return results[:8]
 
-def register_library(app, db, User):
+def register_library(app, db, User, throttle):
     class LibraryWork(db.Model):
         __tablename__ = "library_work"
         id = db.Column(db.Integer, primary_key=True)
@@ -236,7 +236,8 @@ def register_library(app, db, User):
 
     @bp.post("/lookup")
     def lookup():
-        owner()
+        uid=owner()
+        throttle("metadata",uid,30)
         data=request.get_json(silent=True)
         if not isinstance(data,dict): return jsonify(error="Invalid JSON"),400
         try:
@@ -249,6 +250,7 @@ def register_library(app, db, User):
     @bp.post("/copies")
     def create():
         uid=owner()
+        throttle("create-copy",uid,60)
         data=request.get_json(silent=True)
         if not isinstance(data,dict): return jsonify(error="Invalid JSON"),400
         try:
@@ -258,6 +260,9 @@ def register_library(app, db, User):
         existing=db.session.get(LibraryCopy,token)
         if existing:
             if existing.user_id!=uid: return jsonify(error="Conflict"),409
+            original=serialize(existing)
+            if any(original[k]!=v for k,v in d.items()):
+                return jsonify(error="Token already used with different metadata."),409
             return jsonify(id=existing.id,duplicate=True),200
         same=owned(uid).filter(LibraryWork.key==fingerprint(d["title"],d["author"])).count()
         if same and data.get("confirm_duplicate") is not True:
@@ -301,7 +306,7 @@ def register_library(app, db, User):
         fields=["id","title","author","isbn","publisher","language","translator","edition","format","year","pages","printing","genre","tags","status","shelf","notes"]
         writer=csv.DictWriter(buf,fieldnames=fields); writer.writeheader()
         def safe(v):
-            if isinstance(v,str) and v.lstrip().startswith(("=","+","-","@")): return "'"+v
+            if isinstance(v,str) and (v.startswith(("\t","\r","\n")) or v.lstrip().startswith(("=","+","-","@"))): return "'"+v
             return v
         for row in rows: writer.writerow({k:safe(v) for k,v in row.items()})
         return Response(buf.getvalue(),mimetype="text/csv",headers={"Content-Disposition":'attachment; filename="bookvault.csv"'})
