@@ -201,10 +201,12 @@
                     {% if session.get("user_logged_in") %}
                         {% if book.id in favorite_ids %}
                         <form method="POST" action="/favorite/remove/{{ book.id }}" class="favorite-form">
+                            <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
                             <button type="submit" class="text-button text-button--saved" aria-label="Hapus {{ book.title }} dari favorit">♥ Tersimpan</button>
                         </form>
                         {% else %}
                         <form method="POST" action="/favorite/add/{{ book.id }}" class="favorite-form">
+                            <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
                             <button type="submit" class="text-button" aria-label="Simpan {{ book.title }} ke favorit">♡ Simpan</button>
                         </form>
                         {% endif %}

@@ -224,6 +224,7 @@
                     <div class="favorite-actions">
                         <a href="/book/{{ favorite.book.id }}">Detail</a>
                         <form method="POST" action="/favorite/remove/{{ favorite.book.id }}" class="favorite-form">
+                            <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
                             <button type="submit">Hapus</button>
                         </form>
                     </div>

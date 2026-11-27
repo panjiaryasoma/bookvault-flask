@@ -312,6 +312,7 @@
                             <td class="action">
                                 <a href="/admin/book/edit/{{ book.id }}">Edit</a>
                                 <form method="POST" action="/admin/book/delete/{{ book.id }}" class="delete-form">
+                                    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
                                     <button type="submit">Hapus</button>
                                 </form>
                             </td>
