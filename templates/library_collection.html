@@ -34,7 +34,7 @@
             <h3><a href="{{ url_for('library.edit', copy_id=copy.id) }}">{{ e.work.title }}</a></h3>
             <p>{{ e.work.author }}</p>
             <p class="library-meta">{{ [e.publisher,e.year,e.format,e.printing,e.language]|select|join(' · ') or 'Edisi belum lengkap' }}</p>
-            <p class="library-meta">{{ [copy.kind,copy.genre,copy.tags]|select|join(' · ') or 'Belum diklasifikasikan' }}</p>
+            <p class="library-meta">{{ ([copy.kind,copy.genre]+(copy.tags or '').split(', '))|select|unique|join(' · ') or 'Belum diklasifikasikan' }}</p>
             {% if e.isbn %}<small class="library-isbn">ISBN {{ e.isbn }}</small>{% endif %}
         </div>
         <div class="library-entry-actions"><span>{{ copy.status }}</span><a href="{{ url_for('library.edit',copy_id=copy.id) }}">Edit</a></div>

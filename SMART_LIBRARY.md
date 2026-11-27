@@ -1,6 +1,6 @@
 # Smart Library — feature branch
 
-Status: development preview. Do not deploy until CI, migration rehearsal, real Android scanner tests and security review pass.
+Status: development preview. CI includes actual Chromium barcode/OCR fixtures and migration tests; do not deploy until CI is green, production Supabase privileges are independently verified, and real Android scanner tests pass.
 
 ## Local startup
 

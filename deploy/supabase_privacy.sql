@@ -27,16 +27,16 @@ BEGIN
 END $$;
 -- Optional runtime group: only this server-side role can access BookVault tables.
 -- Run as owner; create a separate LOGIN role securely outside this script and grant this group.
-DO $
+DO $bookvault$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='bookvault_app') THEN
     CREATE ROLE bookvault_app NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
   END IF;
-END $;
+END $bookvault$;
 GRANT USAGE ON SCHEMA public TO bookvault_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public."user", public.book, public.favorite,
     public.library_work, public.library_edition, public.library_copy, public.auth_session TO bookvault_app;
-DO $
+DO $bookvault$
 DECLARE
   t text;
   seq text;
@@ -50,5 +50,5 @@ BEGIN
       EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE %s TO bookvault_app',seq);
     END IF;
   END LOOP;
-END $;
+END $bookvault$;
 COMMIT;

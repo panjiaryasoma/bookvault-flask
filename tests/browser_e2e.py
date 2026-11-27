@@ -78,6 +78,9 @@ def main():
             page.locator("#theme-toggle").click()
             expect(page.locator("html")).to_have_attribute("data-theme","light")
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"),"Mobile overflow"
+            switch=page.locator("#theme-toggle").bounding_box()
+            header=page.locator(".user-topbar").bounding_box()
+            assert switch["y"]+switch["height"]<=header["y"]+header["height"],"Theme control overlaps mobile content"
             # Actual camera pipeline; only metadata HTTP is mocked.
             page.locator("#start-camera").click()
             expect(page.locator("#lookup-query")).to_have_value(ISBN,timeout=30000)
@@ -105,6 +108,12 @@ def main():
             expect(page.locator('input[name="isbn"]')).to_have_value("")
             expect(page.locator('input[name="title"]')).to_have_value("Crime and Punishment")
             print("PASS: browser WASM OCR recognized synthetic English cover and cleared stale edition metadata")
+            before=page.locator('input[name="submission_key"]').input_value()
+            page.get_by_role("button",name="Simpan & scan berikutnya").click()
+            page.wait_for_url("**/user/library/scan")
+            expect(page.locator('input[name="title"]')).to_have_value("")
+            assert before!=page.locator('input[name="submission_key"]').input_value(),"Batch form token not rotated"
+            print("PASS: save-and-scan-next starts with clean form and new idempotency token")
             page.locator("#lookup-query").fill("hostile test")
             page.locator("#lookup-form button").click()
             expect(page.get_by_role("button",name="Pilih hasil")).to_be_visible()
@@ -120,6 +129,9 @@ def main():
             page.screenshot(path=str(out/"collection-mobile-dark.png"),full_page=True)
             page.set_viewport_size({"width":1280,"height":900})
             page.screenshot(path=str(out/"collection-desktop-dark.png"),full_page=True)
+            page.set_viewport_size({"width":393,"height":873})
+            page.goto(origin+"/user/library/scan")
+            page.screenshot(path=str(out/"scanner-mobile-dark.png"),full_page=True)
             context.close();browser.close()
     finally:
         server.shutdown();thread.join(timeout=5)
