@@ -1,7 +1,7 @@
 FROM node:22-bookworm-slim AS assets
 WORKDIR /build
-COPY package.json ./
-RUN npm install --ignore-scripts --no-audit --no-fund
+COPY package.json package-lock.json ./
+RUN npm ci --ignore-scripts --no-audit --no-fund
 COPY scripts/vendor.mjs scripts/vendor.mjs
 RUN npm run build
 FROM python:3.12-slim

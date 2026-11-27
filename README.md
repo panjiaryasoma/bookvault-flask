@@ -1,5 +1,7 @@
 # BookVault
 
+> **Smart Library branch:** follow [SMART_LIBRARY.md](SMART_LIBRARY.md) for current setup. The original coursework instructions below are historical; old default secrets, database paths, and admin credentials must not be reused.
+
 BookVault adalah aplikasi katalog buku digital berbasis **Flask**, **SQLite**, dan **REST API**. Aplikasi ini menyediakan katalog buku lokal, fitur login user dan admin, dashboard admin, fitur favorit user, integrasi API publik Open Library, serta endpoint REST API untuk mengelola data buku.
 
 Project ini dibuat untuk tugas Back-End / Pemrograman Web Back-End dengan fokus pada penggunaan Flask, database lokal, autentikasi sederhana, integrasi API publik, validasi data, dan dokumentasi API.

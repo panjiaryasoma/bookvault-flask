@@ -14,7 +14,7 @@ if test_url.get_backend_name()=="sqlite":
         raise RuntimeError("Refusing destructive tests against a persistent SQLite database")
 elif not (test_url.get_backend_name()=="postgresql" and test_url.host in ("localhost","127.0.0.1") and os.getenv("BOOKVAULT_ALLOW_TEST_RESET")=="1" and os.getenv("BOOKVAULT_DB_SCHEMA")=="bookvault_private"):
     raise RuntimeError("Refusing destructive tests outside the isolated CI database")
-from app import app, db, User, Book, Favorite, RateWindow
+from app import app, db, User, Book, Favorite, RateWindow, auth_stamp
 from library import isbn13, lookup_metadata
 
 @pytest.fixture(autouse=True)
@@ -32,8 +32,10 @@ def database():
 def client(name=None):
     c=app.test_client()
     if name:
+        with app.app_context():
+            stamp=auth_stamp(User.query.filter_by(username=name).first())
         with c.session_transaction() as s:
-            s["user_logged_in"]=True;s["user_username"]=name;s["_csrf"]="token-"+name
+            s["user_logged_in"]=True;s["user_username"]=name;s["_csrf"]="token-"+name;s["auth_stamp"]=stamp
     return c
 
 def h(name="alice"):
@@ -256,3 +258,24 @@ def test_classification_dimensions_and_filters():
     assert a.get("/library/export").json[0]["work_form"]=="novel"
     d=payload();d["kind"]="invalid"
     assert a.post("/library/copies",json=d,headers=h()).status_code==400
+
+def test_password_rotation_revokes_existing_sessions():
+    a=client("alice")
+    make(a)
+    with app.app_context():
+        user=User.query.filter_by(username="alice").first()
+        user.set_password("another-password-123")
+        db.session.commit()
+    assert a.get("/library/export").status_code==401
+
+def test_registration_can_be_closed_and_cli_creates_account():
+    app.config["ALLOW_REGISTRATION"]=False
+    try:
+        assert client().get("/register").status_code==403
+        runner=app.test_cli_runner()
+        result=runner.invoke(args=["create-account","private-user"],input="long-password-123\nlong-password-123\n")
+        assert result.exit_code==0,result.output
+        with app.app_context():
+            assert User.query.filter_by(username="private-user").first().check_password("long-password-123")
+    finally:
+        app.config["ALLOW_REGISTRATION"]=True

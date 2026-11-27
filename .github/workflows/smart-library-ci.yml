@@ -53,9 +53,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: npm install --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run build
-      - run: node -e 'console.log("BOOKVAULT_LOCK "+JSON.stringify(JSON.parse(require("fs").readFileSync("package-lock.json","utf8"))))'
       - run: node --check static/js/scanner.js && node --check static/js/csrf.js
       - run: test -s static/vendor/lang/eng.traineddata.gz && test -s static/vendor/lang/ind.traineddata.gz && test -s static/vendor/zxing-browser.min.js
 
@@ -74,7 +73,7 @@ jobs:
         with:
           node-version: "22"
       - run: pip install -r requirements.txt playwright==1.65.2
-      - run: npm install --ignore-scripts --no-audit --no-fund && npm run build
+      - run: npm ci --ignore-scripts --no-audit --no-fund && npm run build
       - run: python -m playwright install --with-deps chromium
       - run: flask --app app init-db
       - run: |
@@ -99,5 +98,5 @@ jobs:
           node-version: "22"
       - run: pip install pip-audit==2.9.0
       - run: pip-audit --strict -r requirements.txt
-      - run: npm install --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm audit --omit=dev --audit-level=moderate

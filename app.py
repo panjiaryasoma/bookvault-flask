@@ -1,7 +1,8 @@
 from flask import Flask, request, jsonify, render_template, session, redirect
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
+from datetime import datetime, timezone
+import click
 from dotenv import load_dotenv
 from sqlalchemy import func, MetaData, event
 from sqlalchemy.engine import make_url
@@ -40,6 +41,8 @@ app.config["MAX_CONTENT_LENGTH"] = 256 * 1024
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = os.getenv("BOOKVAULT_HTTPS", "1") == "1"
+app.config["ALLOW_REGISTRATION"] = os.getenv("BOOKVAULT_ALLOW_REGISTRATION", "0" if app.config["SESSION_COOKIE_SECURE"] else "1") == "1"
+app.config["SESSION_REFRESH_EACH_REQUEST"] = False
 app.config["PERMANENT_SESSION_LIFETIME"] = 86400
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = os.getenv("BOOKVAULT_SECRET_KEY")
@@ -229,6 +232,26 @@ class User(db.Model):
         return check_password_hash(self.password_hash, password)
 
 
+def auth_stamp(user):
+    value = f"{user.id}:{user.role}:{user.password_hash}"
+    return hmac.new(app.config["SECRET_KEY"].encode(), value.encode(), hashlib.sha256).hexdigest()
+
+@app.before_request
+def verify_principal():
+    if session.get("admin_logged_in"):
+        username, role = session.get("admin_username"), "admin"
+    elif session.get("user_logged_in"):
+        username, role = session.get("user_username"), "user"
+    else:
+        return
+    user = User.query.filter_by(username=username, role=role).first()
+    stamp = session.get("auth_stamp", "")
+    if not user or not isinstance(stamp,str) or not hmac.compare_digest(stamp, auth_stamp(user)):
+        session.clear()
+
+def utc_now():
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
 class Book(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(150), nullable=False)
@@ -238,8 +261,8 @@ class Book(db.Model):
     rating = db.Column(db.Float, default=0)
     description = db.Column(db.Text)
     cover_image = db.Column(db.String(255), default="")
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utc_now)
+    updated_at = db.Column(db.DateTime, default=utc_now, onupdate=utc_now)
 
     def to_dict(self):
         return {
@@ -260,7 +283,7 @@ class Favorite(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     book_id = db.Column(db.Integer, db.ForeignKey("book.id"), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utc_now)
 
     user = db.relationship("User", backref="favorites")
     book = db.relationship("Book", backref="favorited_by")
@@ -803,6 +826,7 @@ def admin_login():
             session.permanent = True
             session["admin_logged_in"] = True
             session["admin_username"] = user.username
+            session["auth_stamp"] = auth_stamp(user)
             set_alert("Login admin berhasil.", "success")
             return redirect("/admin")
 
@@ -1178,6 +1202,8 @@ def admin_import_book():
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
+    if not app.config["ALLOW_REGISTRATION"]:
+        abort(403)
     if request.method == "POST":
         throttle("auth-ip", request.remote_addr or "unknown", 40)
         username = request.form.get("username", "").strip()
@@ -1236,6 +1262,7 @@ def user_login():
                 session.permanent = True
                 session["admin_logged_in"] = True
                 session["admin_username"] = user.username
+                session["auth_stamp"] = auth_stamp(user)
                 set_alert("Login admin berhasil.", "success")
                 return redirect("/admin")
 
@@ -1243,6 +1270,7 @@ def user_login():
             session.permanent = True
             session["user_logged_in"] = True
             session["user_username"] = user.username
+            session["auth_stamp"] = auth_stamp(user)
             set_alert("Login user berhasil.", "success")
             return redirect("/user/dashboard")
 
@@ -1366,6 +1394,35 @@ def internal_server_error(e):
 
 from library import register_library
 register_library(app, db, User, throttle)
+
+@app.cli.command("create-account")
+@click.argument("username")
+@click.option("--role", type=click.Choice(["user","admin"]), default="user")
+def create_account(username,role):
+    username=username.strip()
+    if not username or len(username)>80 or User.query.filter_by(username=username).first():
+        raise click.ClickException("Invalid or existing username")
+    password=click.prompt("Password",hide_input=True,confirmation_prompt=True)
+    if not 12<=len(password)<=256:
+        raise click.ClickException("Password must be 12-256 characters")
+    user=User(username=username,role=role)
+    user.set_password(password)
+    db.session.add(user)
+    db.session.commit()
+    click.echo("Account created")
+
+@app.cli.command("reset-password")
+@click.argument("username")
+def reset_password(username):
+    user=User.query.filter_by(username=username).first()
+    if not user:
+        raise click.ClickException("Account not found")
+    password=click.prompt("New password",hide_input=True,confirmation_prompt=True)
+    if not 12<=len(password)<=256:
+        raise click.ClickException("Password must be 12-256 characters")
+    user.set_password(password)
+    db.session.commit()
+    click.echo("Password changed; existing sessions invalidated")
 
 @app.cli.command("init-db")
 def init_db():
