@@ -21,7 +21,7 @@ BEGIN
   LOOP
     seq := pg_get_serial_sequence(t,'id');
     IF seq IS NOT NULL THEN
-      EXECUTE format('REVOKE ALL ON SEQUENCE %s FROM PUBLIC, anon, authenticated',seq);
+      EXECUTE 'REVOKE ALL ON SEQUENCE ' || seq || ' FROM PUBLIC, anon, authenticated';
     END IF;
   END LOOP;
 END $$;
@@ -43,11 +43,11 @@ DECLARE
 BEGIN
   FOREACH t IN ARRAY ARRAY['public."user"','public.book','public.favorite','public.library_work','public.library_edition','public.library_copy','public.auth_session']
   LOOP
-    EXECUTE format('DROP POLICY IF EXISTS bookvault_server_only ON %s',t);
-    EXECUTE format('CREATE POLICY bookvault_server_only ON %s TO bookvault_app USING (true) WITH CHECK (true)',t);
+    EXECUTE 'DROP POLICY IF EXISTS bookvault_server_only ON ' || t;
+    EXECUTE 'CREATE POLICY bookvault_server_only ON ' || t || ' TO bookvault_app USING (true) WITH CHECK (true)';
     seq := pg_get_serial_sequence(t,'id');
     IF seq IS NOT NULL THEN
-      EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE %s TO bookvault_app',seq);
+      EXECUTE 'GRANT USAGE, SELECT ON SEQUENCE ' || seq || ' TO bookvault_app';
     END IF;
   END LOOP;
 END $bookvault$;
