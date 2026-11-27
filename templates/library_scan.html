@@ -33,6 +33,7 @@
     {% if error %}<div class="flash error" role="alert">{{ error }}</div>{% endif %}
     <form method="post" class="library-form" id="copy-form">
         <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        {% if not copy %}<input type="hidden" name="submission_key" value="{{ data.get('submission_key','') }}">{% endif %}
         <fieldset><legend>Karya & edisi</legend><div class="library-form-grid">
         {% for name,label,maxlen in [('title','Judul',240),('author','Penulis',240),('isbn','ISBN',32),('publisher','Penerbit',240),('year','Tahun edisi',40),('printing','Cetakan / edisi',100),('translator','Penerjemah',240),('language','Bahasa',80),('format','Jenis sampul / format',80),('pages','Jumlah halaman',8)] %}
             <label>{{ label }}<input name="{{ name }}" value="{{ data.get(name,'') }}" maxlength="{{ maxlen }}" {% if name in ['title','author'] %}required{% endif %} {% if name in ['isbn','pages'] %}inputmode="numeric"{% endif %}></label>
@@ -49,7 +50,7 @@
             <label class="wide-field">Catatan pribadi<textarea name="notes" rows="4" maxlength="4000">{{ data.get('notes','') }}</textarea></label>
         </div></fieldset>
         {% if not copy %}<label class="duplicate-check"><input type="checkbox" name="allow_duplicate" value="yes" {% if warning %}autofocus{% endif %}> Ini eksemplar atau edisi lain dari karya yang sudah ada.</label>{% endif %}
-        <div class="library-form-actions"><button type="submit" class="primary-action">Simpan eksemplar</button><a href="{{ url_for('library.index') }}">Batal</a></div>
+        <div class="library-form-actions"><button type="submit" class="primary-action">Simpan eksemplar</button>{% if not copy %}<button type="submit" name="next" value="scan" class="library-button">Simpan &amp; scan berikutnya</button>{% endif %}<a href="{{ url_for('library.index') }}">Batal</a></div>
     </form>
     {% if copy %}
     <details class="library-delete"><summary>Hapus eksemplar…</summary><p>Penghapusan permanen hanya berlaku pada koleksi pribadi ini.</p><form method="post" action="{{ url_for('library.delete',copy_id=copy.id) }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="library-button danger" type="submit">Konfirmasi hapus</button></form></details>

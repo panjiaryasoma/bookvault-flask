@@ -16,6 +16,7 @@
 </section>
 <section class="library-section">
     <div class="section-heading section-heading--ruled"><h2>Collection index</h2><span class="section-note">{{ rows.total }} hasil</span></div>
+    <p class="library-meta">Export koleksi: <a class="library-link" href="{{ url_for('library.export_collection',format='json') }}">JSON</a> · <a class="library-link" href="{{ url_for('library.export_collection',format='csv') }}">CSV</a></p>
     <form method="get" class="library-filters">
         <label>Cari<input type="search" name="q" value="{{ term }}" placeholder="Judul, penulis, ISBN, tema" maxlength="160"></label>
         <label>Genre<select name="genre"><option value="">Semua</option>{% for g in genres %}<option {% if g==genre %}selected{% endif %}>{{ g }}</option>{% endfor %}</select></label>

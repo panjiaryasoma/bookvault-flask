@@ -1,5 +1,6 @@
 """Adversarial collection and legacy API regression tests; no live credentials or network."""
 import os
+import secrets
 import unittest
 from unittest.mock import patch
 os.environ["BOOKVAULT_SECRET_KEY"]="test-secret-only-"+"x"*40
@@ -49,7 +50,7 @@ class LibraryTests(unittest.TestCase):
             return s["_csrf"]
 
     def data(self,**overrides):
-        return dict(title="Private book",author="Private author",status="unread",isbn="9780306406157",genre="Sastra",kind="Fiksi",**{k:v for k,v in overrides.items() if k not in {"title","author","status","isbn","genre","kind"}}) | overrides
+        return dict(title="Private book",author="Private author",status="unread",isbn="9780306406157",genre="Sastra",kind="Fiksi",submission_key=secrets.token_urlsafe(24)) | overrides
 
     def add(self,client=None,**overrides):
         client=client or self.alice
@@ -95,6 +96,33 @@ class LibraryTests(unittest.TestCase):
         html=self.alice.get("/user/library").data
         self.assertNotIn(b"Changed work",html)
         self.assertIn(b"Second",html)
+
+    def test_replayed_submission_is_idempotent_and_batch_next(self):
+        token=self.csrf(self.alice)
+        data=self.data(next="scan",allow_duplicate="yes")|{"_csrf":token}
+        first=self.alice.post("/user/library/scan",data=data)
+        self.assertEqual(first.location,"/user/library/scan")
+        second=self.alice.post("/user/library/scan",data=data)
+        self.assertEqual(second.location,"/user/library/scan")
+        with app.app_context():
+            self.assertEqual(db.session.execute(db.text("SELECT count(*) FROM library_copy")).scalar(),1)
+        self.assertEqual(self.bob.post("/user/library/scan",data=data|{"_csrf":self.csrf(self.bob)}).status_code,409)
+        self.assertEqual(self.add(submission_key="bad").status_code,400)
+
+    def test_private_export_and_csv_formula_neutralization(self):
+        self.assertEqual(self.add(title="=HYPERLINK(\"https://evil.example\")",notes=" \t@SUM(1,2)",isbn="").status_code,302)
+        self.assertEqual(self.add(self.bob,title="bob confidential",isbn="").status_code,302)
+        export=self.alice.get("/user/library/export?format=json")
+        self.assertEqual(export.status_code,200)
+        self.assertEqual(len(export.json["collection"]),1)
+        self.assertNotIn(b"bob confidential",export.data)
+        self.assertIn("attachment",export.headers["Content-Disposition"])
+        self.assertEqual(export.headers["Cache-Control"],"no-store")
+        csv=self.alice.get("/user/library/export?format=csv")
+        self.assertIn(b"'=HYPERLINK",csv.data)
+        self.assertIn(b"' \t@SUM",csv.data)
+        self.assertNotIn(b"bob confidential",csv.data)
+        self.assertEqual(app.test_client().get("/user/library/export").status_code,302)
 
     def test_invalid_data_rejected_without_rows(self):
         for invalid in [

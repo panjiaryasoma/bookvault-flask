@@ -1,11 +1,14 @@
 """Private physical collection; intentionally separate from public coursework catalog."""
 import os
 import re
+import csv
+import io
+import secrets
 import threading
 import time
 from collections import OrderedDict, deque
 from datetime import datetime, timezone
-from flask import Blueprint, request, render_template, session, redirect, url_for, abort, jsonify, flash
+from flask import Blueprint, request, render_template, session, redirect, url_for, abort, jsonify, flash, Response
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_
 from library_metadata import isbn13, normalized, safe_cover, lookup
@@ -66,6 +69,7 @@ def register_library(app, db, User, login_required):
         __tablename__="library_copy"
         id=db.Column(db.Integer,primary_key=True)
         edition_id=db.Column(db.Integer,db.ForeignKey("library_edition.id",ondelete="CASCADE"),nullable=False,unique=True)
+        submission_key=db.Column(db.String(32),nullable=False,unique=True)
         edition=db.relationship(LibraryEdition)
         genre=db.Column(db.String(100))
         kind=db.Column(db.String(80))
@@ -91,7 +95,7 @@ def register_library(app, db, User, login_required):
 
     def data_for(copy):
         if copy is None:
-            return {"status":"unread"}
+            return {"status":"unread","submission_key":secrets.token_urlsafe(24)}
         e=copy.edition
         return {"title":e.work.title,"author":e.work.author,**{k:getattr(e,k) or "" for k in ("isbn","publisher","year","printing","translator","language","format","pages","cover")},
                 **{k:getattr(copy,k) or "" for k in ("genre","kind","tags","status","condition","shelf","notes")}}
@@ -123,6 +127,15 @@ def register_library(app, db, User, login_required):
     def save(user,copy=None):
         data,error=parse()
         warning=False
+        submission=request.form.get("submission_key","")
+        target="library.scan" if not copy and request.form.get("next")=="scan" else "library.index"
+        if not copy:
+            data["submission_key"]=submission if re.fullmatch(r"[A-Za-z0-9_-]{32}",submission) else secrets.token_urlsafe(24)
+            if data["submission_key"]!=submission:
+                error="Formulir kedaluwarsa. Periksa data dan kirim kembali."
+            elif owned(user).filter(LibraryCopy.submission_key==submission).first():
+                flash("Eksemplar sudah tersimpan.","success")
+                return redirect(url_for(target))
         if not error:
             q=owned(user)
             if copy:
@@ -148,7 +161,7 @@ def register_library(app, db, User, login_required):
                 setattr(e,k,data[k] or None)
             e.pages=int(data["pages"]) if data["pages"] else None
             if copy is None:
-                copy=LibraryCopy(edition=e)
+                copy=LibraryCopy(edition=e,submission_key=submission)
                 db.session.add(copy)
             for k in ("genre","kind","tags","status","condition","shelf","notes"):
                 setattr(copy,k,data[k])
@@ -158,9 +171,12 @@ def register_library(app, db, User, login_required):
             db.session.commit()
         except IntegrityError:
             db.session.rollback()
+            if not original_copy and owned(user).filter(LibraryCopy.submission_key==submission).first():
+                flash("Eksemplar sudah tersimpan.","success")
+                return redirect(url_for(target))
             return render_template("library_scan.html",data=data,copy=original_copy,error="Perubahan bersamaan terdeteksi. Coba lagi.",warning=False,statuses=STATUS,kinds=KINDS),409
         flash("Buku tersimpan.","success")
-        return redirect(url_for("library.index"))
+        return redirect(url_for(target))
 
     @bp.get("")
     @login_required
@@ -186,7 +202,7 @@ def register_library(app, db, User, login_required):
         if kind in KINDS and kind: q=q.filter(LibraryCopy.kind==kind)
         genres=[v[0] for v in owned(user).with_entities(LibraryCopy.genre).filter(LibraryCopy.genre!="").distinct().order_by(LibraryCopy.genre)]
         languages=[v[0] for v in owned(user).with_entities(LibraryEdition.language).filter(LibraryEdition.language.isnot(None)).distinct().order_by(LibraryEdition.language)]
-        page=max(1,request.args.get("page",1,type=int))
+        page=min(10000,max(1,request.args.get("page",1,type=int)))
         rows=q.order_by(LibraryCopy.id.desc()).paginate(page=page,per_page=24,error_out=False)
         return render_template("library_collection.html",rows=rows,total=total,titles=titles,finished=finished,genres=genres,languages=languages,statuses=STATUS,kinds=KINDS,term=term,genre=genre,status=status,language=language,kind=kind)
 
@@ -219,6 +235,34 @@ def register_library(app, db, User, login_required):
         db.session.commit()
         flash("Eksemplar dihapus.","success")
         return redirect(url_for("library.index"))
+
+    @bp.get("/export")
+    @login_required
+    def export_collection():
+        fmt=request.args.get("format","json")
+        if fmt not in {"json","csv"}:
+            abort(400)
+        q=owned(owner()).order_by(LibraryCopy.id)
+        if q.count()>20000:
+            abort(413)
+        items=[dict(data_for(copy),copy_id=copy.id,created_at=copy.created_at.isoformat()) for copy in q.all()]
+        if fmt=="json":
+            response=jsonify(schema_version=1,collection=items)
+        else:
+            output=io.StringIO(newline="")
+            fields=["copy_id",*FORM_FIELDS,"created_at"]
+            writer=csv.DictWriter(output,fieldnames=fields,extrasaction="ignore")
+            writer.writeheader()
+            def csv_safe(value):
+                if not isinstance(value,str):
+                    return value
+                if re.match(r"^[\s\uFEFF]*[=+\-@]",value) or value.startswith(("\t","\r","\n")):
+                    return "'"+value
+                return value
+            writer.writerows({k:csv_safe(v) for k,v in item.items()} for item in items)
+            response=Response("\ufeff"+output.getvalue(),mimetype="text/csv")
+        response.headers["Content-Disposition"]=f'attachment; filename="bookvault-collection.{fmt}"'
+        return response
 
     @bp.post("/lookup")
     @login_required
